@@ -182,3 +182,28 @@ export class RemoveProjectMember {
     });
   }
 }
+
+export class ListProjectPeople {
+  constructor(private readonly deps: Deps) {}
+
+  /** Everyone who can see the project, with their effective role (e.g. for assignee pickers). */
+  async execute(actorId: string, projectId: string): Promise<ProjectMember[]> {
+    const { project } = await this.deps.projectAccess.authorize(actorId, projectId, 'project:read');
+    const { members, projectMembers } = this.deps.uow.repos;
+    const [workspaceMembers, explicit] = await Promise.all([
+      members.list(project.workspaceId),
+      projectMembers.list(projectId),
+    ]);
+    const explicitRoles = new Map(explicit.map((m) => [m.userId, m.role]));
+    return workspaceMembers.flatMap((m) => {
+      const role = effectiveProjectRole(
+        m.role,
+        project.visibility,
+        explicitRoles.get(m.userId) ?? null,
+      );
+      return role
+        ? [{ userId: m.userId, name: m.name, email: m.email, avatarUrl: m.avatarUrl, role }]
+        : [];
+    });
+  }
+}

@@ -75,6 +75,12 @@ export const projectRoutes: FastifyPluginAsyncZod = async (app) => {
     (req) => uc.listMembers.execute(actor(req), req.params.projectId),
   );
 
+  app.get(
+    '/projects/:projectId/people',
+    { schema: { params: projectParams, response: { 200: z.array(projectMember) } } },
+    (req) => uc.listPeople.execute(actor(req), req.params.projectId),
+  );
+
   app.put(
     '/projects/:projectId/members/:userId',
     { schema: { params: memberParams, body: setProjectMemberBody } },

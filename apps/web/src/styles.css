@@ -1,0 +1,140 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/* Dark mode follows [data-theme="dark"] on <html>, set from the user's choice or the OS. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --bg: #fbfbfc;
+  --sidebar: #f4f4f6;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --muted: #f1f1f4;
+  --hover: #ececf0;
+  --border: #e4e4e9;
+  --border-strong: #d4d4db;
+  --fg: #17171c;
+  --fg-muted: #5b5b66;
+  --fg-subtle: #9a9aa5;
+  --accent: #5e6ad2;
+  --accent-hover: #4e5ac4;
+  --accent-soft: #eef0fc;
+  --accent-fg: #ffffff;
+  --danger: #dc3545;
+  --danger-soft: #fdecee;
+  --success: #16a34a;
+  --warning: #d97706;
+  --ring: #5e6ad2;
+  --shadow: 0 1px 2px rgb(16 16 24 / 0.04), 0 4px 16px rgb(16 16 24 / 0.06);
+  --shadow-lg: 0 8px 40px rgb(16 16 24 / 0.16);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #0e0e11;
+  --sidebar: #121216;
+  --surface: #17171b;
+  --raised: #1d1d22;
+  --muted: #1f1f25;
+  --hover: #26262d;
+  --border: #2a2a31;
+  --border-strong: #3a3a43;
+  --fg: #ececf0;
+  --fg-muted: #a2a2ad;
+  --fg-subtle: #6c6c78;
+  --accent: #7c86ea;
+  --accent-hover: #8c95ee;
+  --accent-soft: #23253d;
+  --accent-fg: #ffffff;
+  --danger: #f0566a;
+  --danger-soft: #3a1b22;
+  --success: #3fbf6f;
+  --warning: #f2a33a;
+  --ring: #7c86ea;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 8px 40px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-muted: var(--muted);
+  --color-hover: var(--hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@utility animate-slide-in {
+  animation: slide-in-right 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@utility animate-pop {
+  animation: pop-in 120ms ease-out;
+}

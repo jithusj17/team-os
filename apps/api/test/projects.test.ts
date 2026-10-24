@@ -177,3 +177,38 @@ describe('projects', () => {
     });
   });
 });
+
+describe('project people', () => {
+  let app: TestApp;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+  });
+  afterAll(() => app.close());
+  beforeEach(() => resetState(app));
+
+  it('lists everyone with access and their effective role, visible to guests in the project', async () => {
+    const ctx = await setupProject(app);
+    const url = `/projects/${ctx.project.id}`;
+    await ok(app, ctx.owner, 'PUT', `${url}/members/${ctx.guest.id}`, { role: 'viewer' }, 204);
+
+    const people = await ok(app, ctx.guest, 'GET', `${url}/people`);
+    const roles = Object.fromEntries(
+      people.map((p: { email: string; role: string }) => [p.email, p.role]),
+    );
+    expect(roles).toEqual({
+      'owner@example.com': 'admin',
+      'admin@example.com': 'admin',
+      'member@example.com': 'editor',
+      'guest@example.com': 'viewer',
+    });
+
+    await ok(app, ctx.owner, 'PATCH', url, { visibility: 'private' });
+    const privatePeople = await ok(app, ctx.owner, 'GET', `${url}/people`);
+    expect(privatePeople.map((p: { email: string }) => p.email).sort()).toEqual([
+      'admin@example.com',
+      'guest@example.com',
+      'owner@example.com',
+    ]);
+  });
+});
