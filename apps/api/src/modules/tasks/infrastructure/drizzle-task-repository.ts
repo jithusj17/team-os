@@ -44,10 +44,21 @@ const viewColumns = {
     where tl.task_id = ${tasks.id}
   ), '[]'::json)`,
   subtaskCount: sql<number>`(select count(*)::int from tasks st where st.parent_id = ${tasks.id})`,
+  openBlockerCount: sql<number>`(
+    select count(*)::int from task_dependencies d
+    join tasks b on b.id = d.blocker_id
+    join project_statuses bs on bs.id = b.status_id
+    where d.blocked_id = ${tasks.id} and bs.category not in ('done', 'canceled')
+  )`,
 };
 
 type TaskRow = Omit<Task, 'priority'> & { priority: number };
-type ViewRow = TaskRow & { projectKey: string; labels: Label[]; subtaskCount: number };
+type ViewRow = TaskRow & {
+  projectKey: string;
+  labels: Label[];
+  subtaskCount: number;
+  openBlockerCount: number;
+};
 
 const toTask = (row: TaskRow): Task => ({ ...row, priority: rankToPriority(row.priority) });
 const toView = ({ projectKey, ...row }: ViewRow): TaskView => ({
@@ -55,6 +66,7 @@ const toView = ({ projectKey, ...row }: ViewRow): TaskView => ({
   key: formatTaskKey(projectKey, row.number),
   labels: row.labels,
   subtaskCount: row.subtaskCount,
+  openBlockerCount: row.openBlockerCount,
 });
 
 /** Keyset pagination: each sort is a total order over (expression, id). */

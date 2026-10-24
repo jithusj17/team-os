@@ -57,6 +57,8 @@ export const project = z.object({
   name: z.string(),
   description: z.string(),
   visibility: projectVisibility,
+  /** When true, tasks can't move to a done status while a blocker is still open. */
+  enforceDependencies: z.boolean(),
   role: projectRole,
   createdAt: z.coerce.date(),
 });
@@ -77,6 +79,7 @@ export const updateProjectBody = z
     name: z.string().trim().min(1).max(80),
     description: z.string().max(5000),
     visibility: projectVisibility,
+    enforceDependencies: z.boolean(),
   })
   .partial()
   .refine((b) => Object.keys(b).length > 0, 'Provide at least one field');
@@ -128,6 +131,8 @@ export const task = z.object({
   estimate: z.number().int().nullable(),
   parentId: z.uuid().nullable(),
   subtaskCount: z.number().int(),
+  /** Blockers that are not yet done or canceled. */
+  openBlockerCount: z.number().int(),
   sortOrder: z.number(),
   /** Incremented on every change; send it back on update to detect conflicting edits. */
   version: z.number().int(),
@@ -245,9 +250,51 @@ export const activityEntry = z.object({
     'comment.created',
     'comment.updated',
     'comment.deleted',
+    'dependency.added',
+    'dependency.removed',
   ]),
   changes: z.record(z.string(), fieldChange).nullable(),
   commentId: z.uuid().nullable(),
   createdAt: z.coerce.date(),
 });
 export type ActivityEntry = z.infer<typeof activityEntry>;
+
+// ---- Dependencies ----
+
+/** A task on one end of a dependency, possibly in another project. */
+export const dependencyTask = z.object({
+  id: z.uuid(),
+  key: z.string(),
+  title: z.string(),
+  projectId: z.uuid(),
+  statusCategory: statusCategory,
+  /** Done or canceled: no longer blocks anything. */
+  closed: z.boolean(),
+});
+export type DependencyTask = z.infer<typeof dependencyTask>;
+
+export const taskDependencies = z.object({
+  blockedBy: z.array(dependencyTask),
+  blocking: z.array(dependencyTask),
+  /** Dependencies on tasks in projects the viewer can't see are counted but not shown. */
+  hiddenCount: z.number().int(),
+});
+
+export const addDependencyBody = z.object({ blockerId: z.uuid() });
+
+export const dependencyGraph = z.object({
+  nodes: z.array(
+    dependencyTask.extend({
+      estimate: z.number().int().nullable(),
+      /** True for tasks from other projects that block or are blocked by this project's tasks. */
+      external: z.boolean(),
+    }),
+  ),
+  edges: z.array(z.object({ blockerId: z.uuid(), blockedId: z.uuid() })),
+  /**
+   * The longest chain of open work through the graph, weighted by estimate (1 when unset):
+   * the sequence that determines the earliest possible finish.
+   */
+  criticalPath: z.object({ taskIds: z.array(z.uuid()), length: z.number() }),
+});
+export type DependencyGraph = z.infer<typeof dependencyGraph>;

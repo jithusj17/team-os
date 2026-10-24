@@ -62,6 +62,12 @@ import {
   ListComments,
 } from './modules/tasks/application/comment-use-cases.js';
 import {
+  AddDependency,
+  GetDependencyGraph,
+  ListDependencies,
+  RemoveDependency,
+} from './modules/tasks/application/dependency-use-cases.js';
+import {
   CreateLabel,
   DeleteLabel,
   ListLabels,
@@ -165,6 +171,10 @@ export function createContainer(deps: {
       addComment: new AddComment(taskDeps),
       editComment: new EditComment(taskDeps),
       deleteComment: new DeleteComment(taskDeps),
+      listDependencies: new ListDependencies(taskDeps),
+      addDependency: new AddDependency(taskDeps),
+      removeDependency: new RemoveDependency(taskDeps),
+      dependencyGraph: new GetDependencyGraph(taskDeps),
     },
     labels: {
       list: new ListLabels({ uow, workspaceAccess: access }),

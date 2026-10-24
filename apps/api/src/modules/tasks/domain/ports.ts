@@ -1,5 +1,6 @@
 import type { ActivityEntry } from '@team-os/shared';
 import type { Comment } from './comment.js';
+import type { DependencyEdge, DependencyTask, GraphNode } from './dependency.js';
 import type { Label } from './label.js';
 import type { FieldChanges, Task, TaskFilter, TaskSort, TaskView } from './task.js';
 
@@ -76,4 +77,18 @@ export interface ActivityRepository {
     commentId?: string | null;
   }): Promise<void>;
   list(taskId: string): Promise<ActivityEntry[]>;
+}
+
+export interface DependencyRepository {
+  /** Serializes dependency writes within a workspace (held until the transaction ends). */
+  lockWorkspace(workspaceId: string): Promise<void>;
+  /** Throws a `dependency_exists` conflict if the edge already exists. */
+  add(edge: DependencyEdge & { workspaceId: string; createdBy: string }): Promise<void>;
+  remove(edge: DependencyEdge): Promise<boolean>;
+  /** Whether `toTaskId` can be reached from `fromTaskId` by following blocker -> blocked edges. */
+  isReachable(fromTaskId: string, toTaskId: string): Promise<boolean>;
+  forTask(taskId: string): Promise<{ blockedBy: DependencyTask[]; blocking: DependencyTask[] }>;
+  openBlockers(taskId: string): Promise<DependencyTask[]>;
+  /** The project's tasks, external tasks linked to them, and the edges between them. */
+  projectGraph(projectId: string): Promise<{ nodes: GraphNode[]; edges: DependencyEdge[] }>;
 }

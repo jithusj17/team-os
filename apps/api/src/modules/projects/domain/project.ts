@@ -14,8 +14,14 @@ export interface Project {
   name: string;
   description: string;
   visibility: ProjectVisibility;
+  /** When true, a task can't move to a done status while a blocker is still open. */
+  enforceDependencies: boolean;
   createdAt: Date;
 }
+
+export type ProjectPatch = Partial<
+  Pick<Project, 'name' | 'description' | 'visibility' | 'enforceDependencies'>
+>;
 
 /** A project as seen by one user. */
 export interface ProjectView extends Project {

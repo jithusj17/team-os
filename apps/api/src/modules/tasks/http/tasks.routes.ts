@@ -2,13 +2,16 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   activityEntry,
+  addDependencyBody,
   comment,
+  dependencyGraph,
   commentBody,
   createLabelBody,
   createTaskBody,
   label,
   listTasksQuery,
   task,
+  taskDependencies,
   taskList,
   updateLabelBody,
   updateTaskBody,
@@ -74,6 +77,40 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     '/tasks/:taskId/activity',
     { schema: { params: taskParams, response: { 200: z.array(activityEntry) } } },
     (req) => uc.activity.execute(actor(req), req.params.taskId),
+  );
+
+  // ---- Dependencies ----
+
+  app.get(
+    '/tasks/:taskId/dependencies',
+    { schema: { params: taskParams, response: { 200: taskDependencies } } },
+    (req) => uc.listDependencies.execute(actor(req), req.params.taskId),
+  );
+
+  app.post(
+    '/tasks/:taskId/dependencies',
+    {
+      schema: { params: taskParams, body: addDependencyBody, response: { 201: taskDependencies } },
+    },
+    async (req, reply) => {
+      await uc.addDependency.execute(actor(req), req.params.taskId, req.body.blockerId);
+      return reply.code(201).send(await uc.listDependencies.execute(actor(req), req.params.taskId));
+    },
+  );
+
+  app.delete(
+    '/tasks/:taskId/dependencies/:blockerId',
+    { schema: { params: taskParams.extend({ blockerId: z.uuid() }) } },
+    async (req, reply) => {
+      await uc.removeDependency.execute(actor(req), req.params.taskId, req.params.blockerId);
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    '/projects/:projectId/dependency-graph',
+    { schema: { params: projectParams, response: { 200: dependencyGraph } } },
+    (req) => uc.dependencyGraph.execute(actor(req), req.params.projectId),
   );
 
   // ---- Comments ----

@@ -5,6 +5,7 @@ import { DrizzleProjectRepository } from '../../modules/projects/infrastructure/
 import { DrizzleStatusRepository } from '../../modules/projects/infrastructure/drizzle-status-repository.js';
 import { DrizzleActivityRepository } from '../../modules/tasks/infrastructure/drizzle-activity-repository.js';
 import { DrizzleCommentRepository } from '../../modules/tasks/infrastructure/drizzle-comment-repository.js';
+import { DrizzleDependencyRepository } from '../../modules/tasks/infrastructure/drizzle-dependency-repository.js';
 import { DrizzleLabelRepository } from '../../modules/tasks/infrastructure/drizzle-label-repository.js';
 import { DrizzleTaskRepository } from '../../modules/tasks/infrastructure/drizzle-task-repository.js';
 import { DrizzleInviteRepository } from '../../modules/workspaces/infrastructure/drizzle-invite-repository.js';
@@ -26,6 +27,7 @@ export function createRepositories(db: DbExecutor) {
     labels: new DrizzleLabelRepository(db),
     comments: new DrizzleCommentRepository(db),
     activity: new DrizzleActivityRepository(db),
+    dependencies: new DrizzleDependencyRepository(db),
   };
 }
 

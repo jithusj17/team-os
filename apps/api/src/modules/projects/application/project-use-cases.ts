@@ -6,6 +6,7 @@ import type { MemberRepository } from '../../workspaces/domain/ports.js';
 import {
   DEFAULT_STATUSES,
   type ProjectMember,
+  type ProjectPatch,
   type ProjectView,
   type ProjectVisibility,
   type Status,
@@ -54,7 +55,12 @@ export class CreateProject {
     await this.deps.workspaceAccess.authorize(actorId, workspaceId, { action: 'project:create' });
 
     return this.deps.uow.transaction(async ({ projects, projectMembers, statuses }) => {
-      const project = await projects.create({ ...input, workspaceId, createdBy: actorId });
+      const project = await projects.create({
+        ...input,
+        workspaceId,
+        enforceDependencies: true,
+        createdBy: actorId,
+      });
       const created = await statuses.createMany(project.id, DEFAULT_STATUSES);
       // The creator administers the project, even if it is private.
       await projectMembers.upsert(project.id, actorId, 'admin');
@@ -80,11 +86,7 @@ export class GetProject {
 export class UpdateProject {
   constructor(private readonly deps: Deps) {}
 
-  async execute(
-    actorId: string,
-    projectId: string,
-    patch: { name?: string; description?: string; visibility?: ProjectVisibility },
-  ): Promise<ProjectDetail> {
+  async execute(actorId: string, projectId: string, patch: ProjectPatch): Promise<ProjectDetail> {
     const { role } = await this.deps.projectAccess.authorize(actorId, projectId, 'project:update');
     const { projects, statuses } = this.deps.uow.repos;
     const project = await projects.update(projectId, patch);

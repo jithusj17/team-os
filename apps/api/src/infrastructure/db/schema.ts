@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   customType,
   date,
@@ -127,6 +128,8 @@ export const projects = pgTable(
     name: text('name').notNull(),
     description: text('description').notNull().default(''),
     visibility: projectVisibility('visibility').notNull().default('workspace'),
+    /** When true, a task can't move to a done status while any blocker is still open. */
+    enforceDependencies: boolean('enforce_dependencies').notNull().default(true),
     /** Last task number issued; incremented under a row lock to number tasks ENG-1, ENG-2, ... */
     taskCounter: integer('task_counter').notNull().default(0),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -281,4 +284,27 @@ export const taskActivity = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('task_activity_task_created_idx').on(t.taskId, t.createdAt)],
+);
+
+/** `blockerId` blocks `blockedId`. Both tasks are in the same workspace; projects may differ. */
+export const taskDependencies = pgTable(
+  'task_dependencies',
+  {
+    blockerId: uuid('blocker_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    blockedId: uuid('blocked_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockerId, t.blockedId] }),
+    index().on(t.blockedId),
+    check('task_dependencies_not_self', sql`${t.blockerId} <> ${t.blockedId}`),
+  ],
 );

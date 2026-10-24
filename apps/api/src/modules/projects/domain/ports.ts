@@ -3,8 +3,8 @@ import type {
   NewStatus,
   Project,
   ProjectMember,
+  ProjectPatch,
   ProjectRole,
-  ProjectVisibility,
   Status,
 } from './project.js';
 
@@ -26,10 +26,7 @@ export interface ProjectRepository {
   ): Promise<(Project & { explicitRole: ProjectRole | null })[]>;
   /** Throws a `project_key_taken` conflict if the key is in use in the workspace. */
   create(data: Omit<Project, 'id' | 'createdAt'> & { createdBy: string }): Promise<Project>;
-  update(
-    id: string,
-    patch: { name?: string; description?: string; visibility?: ProjectVisibility },
-  ): Promise<Project | null>;
+  update(id: string, patch: ProjectPatch): Promise<Project | null>;
   delete(id: string): Promise<void>;
   /** Issues the next task number for the project. Must run inside a transaction. */
   nextTaskNumber(projectId: string): Promise<number>;

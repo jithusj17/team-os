@@ -2,7 +2,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { isUniqueViolation, type DbExecutor } from '../../../infrastructure/db/executor.js';
 import { projectMembers, projects, workspaceMembers } from '../../../infrastructure/db/schema.js';
 import { conflict } from '../../../shared/domain/errors.js';
-import type { Project, ProjectVisibility } from '../domain/project.js';
+import type { Project, ProjectPatch } from '../domain/project.js';
 import type { ProjectAccessContext, ProjectRepository } from '../domain/ports.js';
 
 const columns = {
@@ -12,6 +12,7 @@ const columns = {
   name: projects.name,
   description: projects.description,
   visibility: projects.visibility,
+  enforceDependencies: projects.enforceDependencies,
   createdAt: projects.createdAt,
 };
 
@@ -81,10 +82,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
     }
   }
 
-  async update(
-    id: string,
-    patch: { name?: string; description?: string; visibility?: ProjectVisibility },
-  ) {
+  async update(id: string, patch: ProjectPatch) {
     const [row] = await this.db
       .update(projects)
       .set(patch)

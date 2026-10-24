@@ -7,6 +7,7 @@ import { defaultStatus, isClosedCategory, type Status } from '../../projects/dom
 import type { ProjectRepository, StatusRepository } from '../../projects/domain/ports.js';
 import type {
   ActivityRepository,
+  DependencyRepository,
   LabelRepository,
   TaskPage,
   TaskRepository,
@@ -26,6 +27,7 @@ type Repos = {
   tasks: TaskRepository;
   labels: LabelRepository;
   activity: ActivityRepository;
+  dependencies: DependencyRepository;
   statuses: StatusRepository;
   projects: ProjectRepository;
 };
@@ -271,8 +273,19 @@ export class UpdateTask {
         );
       }
       if (statusChanged) {
-        const closed = isClosedCategory(statuses.find((s) => s.id === targetStatusId)!.category);
-        patch.completedAt = closed ? (current.completedAt ?? clock.now()) : null;
+        const category = statuses.find((s) => s.id === targetStatusId)!.category;
+        if (category === 'done' && grant.project.enforceDependencies) {
+          const open = await repos.dependencies.openBlockers(taskId);
+          if (open.length > 0) {
+            throw conflict(
+              'blocked_by_open_tasks',
+              `Finish the blocking tasks first: ${open.map((t) => t.key).join(', ')}`,
+            );
+          }
+        }
+        patch.completedAt = isClosedCategory(category)
+          ? (current.completedAt ?? clock.now())
+          : null;
       }
 
       // The version check makes concurrent edits fail loudly instead of overwriting each other.

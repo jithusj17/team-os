@@ -29,6 +29,8 @@ export interface TaskView extends Task {
   key: string;
   labels: Label[];
   subtaskCount: number;
+  /** Blockers that are not yet done or canceled. */
+  openBlockerCount: number;
 }
 
 export interface TaskFilter {
