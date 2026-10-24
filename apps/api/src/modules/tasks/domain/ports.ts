@@ -42,6 +42,15 @@ export interface TaskRepository {
   rebalance(projectId: string, statusId: string): Promise<void>;
   /** IDs of the task's ancestors (parent, grandparent, ...). */
   ancestorIds(taskId: string): Promise<string[]>;
+  /** Open, assigned tasks due between two dates (inclusive, YYYY-MM-DD). */
+  findDueBetween(
+    from: string,
+    to: string,
+  ): Promise<
+    (Pick<TaskView, 'id' | 'key' | 'title' | 'projectId' | 'workspaceId' | 'dueDate'> & {
+      assigneeId: string;
+    })[]
+  >;
 }
 
 export interface LabelRepository {
@@ -91,4 +100,12 @@ export interface DependencyRepository {
   openBlockers(taskId: string): Promise<DependencyTask[]>;
   /** The project's tasks, external tasks linked to them, and the edges between them. */
   projectGraph(projectId: string): Promise<{ nodes: GraphNode[]; edges: DependencyEdge[] }>;
+}
+
+/** Users following a task: notified about comments and status changes. */
+export interface WatcherRepository {
+  /** Adds watchers, ignoring ones already watching. */
+  add(taskId: string, userIds: string[]): Promise<void>;
+  remove(taskId: string, userId: string): Promise<boolean>;
+  list(taskId: string): Promise<string[]>;
 }

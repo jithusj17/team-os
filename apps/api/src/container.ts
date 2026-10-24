@@ -89,6 +89,17 @@ import {
   RealtimeAccess,
 } from './modules/realtime/application/realtime-use-cases.js';
 import { RedisPresenceStore } from './modules/realtime/infrastructure/redis-presence-store.js';
+import {
+  FanOutEvent,
+  GetNotificationPreferences,
+  ListNotifications,
+  MarkNotificationsRead,
+  SendDueSoonReminders,
+  SendEmailDigests,
+  UpdateNotificationPreferences,
+} from './modules/notifications/application/notification-use-cases.js';
+import { SocketIoNotificationPusher } from './modules/notifications/infrastructure/socket-io-notification-pusher.js';
+import { ListWatchers, SetWatching } from './modules/tasks/application/watcher-use-cases.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -109,7 +120,10 @@ export function createContainer(deps: {
   const tokens = new CryptoTokenService();
   const clock = systemClock;
   const jobs = new BullMqJobQueue(config.REDIS_URL, log);
-  const urls: AppUrls = { invite: (token) => `${config.WEB_ORIGIN}/invites/${token}` };
+  const urls: AppUrls = {
+    invite: (token) => `${config.WEB_ORIGIN}/invites/${token}`,
+    task: (workspaceId, key) => `${config.WEB_ORIGIN}/w/${workspaceId}/tasks/${key}`,
+  };
   const sessions = new RedisSessionStore(redis, tokens, {
     idleTtlDays: config.SESSION_TTL_DAYS,
     maxAgeDays: config.SESSION_MAX_AGE_DAYS,
@@ -121,6 +135,8 @@ export function createContainer(deps: {
   const taskAccess = new TaskAccess({ tasks: uow.repos.tasks, projectAccess });
   const projectDeps = { uow, projectAccess };
   const taskDeps = { uow, projectAccess, taskAccess, clock };
+  const pusher = new SocketIoNotificationPusher(redis);
+  const deliveryDeps = { uow, projectAccess, pusher, clock };
   const realtimeAccess = new RealtimeAccess({
     workspaceAccess: access,
     projectAccess,
@@ -187,6 +203,17 @@ export function createContainer(deps: {
       addDependency: new AddDependency(taskDeps),
       removeDependency: new RemoveDependency(taskDeps),
       dependencyGraph: new GetDependencyGraph(taskDeps),
+      listWatchers: new ListWatchers(taskDeps),
+      setWatching: new SetWatching(taskDeps),
+    },
+    notifications: {
+      fanOut: new FanOutEvent(deliveryDeps),
+      sendDueSoonReminders: new SendDueSoonReminders(deliveryDeps),
+      sendEmailDigests: new SendEmailDigests({ uow, jobs, urls, clock }),
+      list: new ListNotifications({ uow, clock }),
+      markRead: new MarkNotificationsRead({ uow, clock }),
+      getPreferences: new GetNotificationPreferences({ uow, clock }),
+      updatePreferences: new UpdateNotificationPreferences({ uow, clock }),
     },
     realtime: {
       access: realtimeAccess,

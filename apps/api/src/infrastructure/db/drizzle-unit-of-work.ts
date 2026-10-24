@@ -8,9 +8,12 @@ import { DrizzleCommentRepository } from '../../modules/tasks/infrastructure/dri
 import { DrizzleDependencyRepository } from '../../modules/tasks/infrastructure/drizzle-dependency-repository.js';
 import { DrizzleLabelRepository } from '../../modules/tasks/infrastructure/drizzle-label-repository.js';
 import { DrizzleTaskRepository } from '../../modules/tasks/infrastructure/drizzle-task-repository.js';
+import { DrizzleWatcherRepository } from '../../modules/tasks/infrastructure/drizzle-watcher-repository.js';
 import { DrizzleInviteRepository } from '../../modules/workspaces/infrastructure/drizzle-invite-repository.js';
 import { DrizzleMemberRepository } from '../../modules/workspaces/infrastructure/drizzle-member-repository.js';
 import { DrizzleWorkspaceRepository } from '../../modules/workspaces/infrastructure/drizzle-workspace-repository.js';
+import { DrizzleNotificationRepository } from '../../modules/notifications/infrastructure/drizzle-notification-repository.js';
+import { DrizzlePreferenceRepository } from '../../modules/notifications/infrastructure/drizzle-preference-repository.js';
 import { DrizzleEventRepository } from '../outbox/drizzle-event-repository.js';
 import type { DbExecutor } from './executor.js';
 
@@ -30,6 +33,9 @@ export function createRepositories(db: DbExecutor) {
     activity: new DrizzleActivityRepository(db),
     dependencies: new DrizzleDependencyRepository(db),
     events: new DrizzleEventRepository(db),
+    watchers: new DrizzleWatcherRepository(db),
+    notifications: new DrizzleNotificationRepository(db),
+    preferences: new DrizzlePreferenceRepository(db),
   };
 }
 

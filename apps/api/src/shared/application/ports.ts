@@ -21,4 +21,5 @@ export interface Clock {
 /** Builds links into the web app (invite links, email links). */
 export interface AppUrls {
   invite(token: string): string;
+  task(workspaceId: string, taskKey: string): string;
 }

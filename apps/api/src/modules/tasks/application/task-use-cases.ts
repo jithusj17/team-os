@@ -12,10 +12,12 @@ import type {
   LabelRepository,
   TaskPage,
   TaskRepository,
+  WatcherRepository,
 } from '../domain/ports.js';
 import {
   SORT_GAP,
   diffTask,
+  type FieldChanges,
   parseTaskKey,
   sortOrderBetween,
   type Task,
@@ -32,17 +34,22 @@ type Repos = {
   statuses: StatusRepository;
   projects: ProjectRepository;
   events: EventRepository;
+  watchers: WatcherRepository;
 };
 type Deps = { uow: UnitOfWork<Repos>; projectAccess: ProjectAccess; clock: Clock };
 
 export const taskNotFound = () => notFound('task_not_found', 'Task not found');
 
-/** Records a task event in the current transaction; the payload is the task as clients see it. */
+/**
+ * Records a task event in the current transaction. The payload is the task as clients see it,
+ * plus `changes` (field -> from/to) so background jobs can react to what changed.
+ */
 export function recordTaskEvent(
   events: EventRepository,
   type: 'task.created' | 'task.updated',
   task: TaskView,
   actorId: string,
+  changes: FieldChanges = {},
 ) {
   return events.append({
     workspaceId: task.workspaceId,
@@ -50,7 +57,7 @@ export function recordTaskEvent(
     taskId: task.id,
     type,
     actorId,
-    payload: task,
+    payload: { ...task, changes },
   });
 }
 
@@ -250,6 +257,7 @@ export class CreateTask {
       });
       if (labelIds.length) await repos.tasks.setLabels(task.id, [...new Set(labelIds)]);
       await repos.activity.record({ taskId: task.id, actorId, type: 'task.created' });
+      await repos.watchers.add(task.id, [actorId, ...(task.assigneeId ? [task.assigneeId] : [])]);
       const view = (await repos.tasks.findView(task.id))!;
       await recordTaskEvent(repos.events, 'task.created', view, actorId);
       return view;
@@ -323,12 +331,19 @@ export class UpdateTask {
       if (Object.keys(changes).length > 0) {
         await repos.activity.record({ taskId, actorId, type: 'task.updated', changes });
       }
-      const view = (await repos.tasks.findView(taskId))!;
-      await recordTaskEvent(repos.events, 'task.updated', view, actorId);
+      if (updated.assigneeId && updated.assigneeId !== current.assigneeId) {
+        await repos.watchers.add(taskId, [updated.assigneeId]);
+      }
 
-      // Closing or reopening a blocker changes its dependents' openBlockerCount.
       const wasClosed = current.completedAt !== null;
       const isClosed = updated.completedAt !== null;
+      const view = (await repos.tasks.findView(taskId))!;
+      await recordTaskEvent(repos.events, 'task.updated', view, actorId, {
+        ...changes,
+        ...(wasClosed !== isClosed && { completed: { from: wasClosed, to: isClosed } }),
+      });
+
+      // Closing or reopening a blocker changes its dependents' openBlockerCount.
       if (wasClosed !== isClosed) {
         const { blocking } = await repos.dependencies.forTask(taskId);
         for (const dependent of blocking) {

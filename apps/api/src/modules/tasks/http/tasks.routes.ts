@@ -113,6 +113,28 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     (req) => uc.dependencyGraph.execute(actor(req), req.params.projectId),
   );
 
+  // ---- Watchers ----
+
+  app.get(
+    '/tasks/:taskId/watchers',
+    { schema: { params: taskParams, response: { 200: z.array(z.uuid()) } } },
+    (req) => uc.listWatchers.execute(actor(req), req.params.taskId),
+  );
+
+  app.put('/tasks/:taskId/watchers/me', { schema: { params: taskParams } }, async (req, reply) => {
+    await uc.setWatching.execute(actor(req), req.params.taskId, true);
+    return reply.code(204).send();
+  });
+
+  app.delete(
+    '/tasks/:taskId/watchers/me',
+    { schema: { params: taskParams } },
+    async (req, reply) => {
+      await uc.setWatching.execute(actor(req), req.params.taskId, false);
+      return reply.code(204).send();
+    },
+  );
+
   // ---- Comments ----
 
   app.get(

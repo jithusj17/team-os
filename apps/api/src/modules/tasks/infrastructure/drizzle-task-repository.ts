@@ -261,6 +261,20 @@ export class DrizzleTaskRepository implements TaskRepository {
     `);
   }
 
+  async findDueBetween(from: string, to: string) {
+    const rows = await this.views().where(
+      and(
+        sql`${tasks.dueDate} between ${from}::date and ${to}::date`,
+        sql`${tasks.assigneeId} is not null`,
+        sql`${tasks.completedAt} is null`,
+      ),
+    );
+    return rows.map((row) => {
+      const view = toView(row);
+      return { ...view, assigneeId: view.assigneeId! };
+    });
+  }
+
   async ancestorIds(taskId: string) {
     // UNION (not UNION ALL) also guards against looping on any corrupt cycle.
     // The executor type is driver-agnostic; postgres-js returns raw-query rows as an array.

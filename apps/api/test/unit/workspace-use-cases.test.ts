@@ -87,7 +87,10 @@ describe('workspace use cases', () => {
   });
 
   describe('invites', () => {
-    const urls = { invite: (t: string) => `https://app.test/invites/${t}` };
+    const urls = {
+      invite: (t: string) => `https://app.test/invites/${t}`,
+      task: (ws: string, key: string) => `https://app.test/w/${ws}/tasks/${key}`,
+    };
 
     async function invited(email: string) {
       const { owner, ws } = await workspaceWithOwner();

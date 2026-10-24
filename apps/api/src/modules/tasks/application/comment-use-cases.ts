@@ -5,7 +5,7 @@ import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { forbidden, notFound } from '../../../shared/domain/errors.js';
 import type { ProjectAccess } from '../../projects/application/project-access.js';
 import { parseMentions, type Comment } from '../domain/comment.js';
-import type { ActivityRepository, CommentRepository } from '../domain/ports.js';
+import type { ActivityRepository, CommentRepository, WatcherRepository } from '../domain/ports.js';
 import type { Task } from '../domain/task.js';
 import type { TaskAccess } from './task-use-cases.js';
 
@@ -14,6 +14,7 @@ type Deps = {
     comments: CommentRepository;
     activity: ActivityRepository;
     events: EventRepository;
+    watchers: WatcherRepository;
   }>;
   taskAccess: TaskAccess;
   projectAccess: ProjectAccess;
@@ -58,8 +59,10 @@ export class AddComment {
   async execute(actorId: string, taskId: string, body: string): Promise<Comment> {
     const { task } = await this.deps.taskAccess.authorize(actorId, taskId, 'comment:create');
     const mentions = await visibleMentions(this.deps.projectAccess, task.projectId, body);
-    return this.deps.uow.transaction(async ({ comments, activity, events }) => {
+    return this.deps.uow.transaction(async ({ comments, activity, events, watchers }) => {
       const comment = await comments.create({ taskId, authorId: actorId, body, mentions });
+      // Commenting or being mentioned subscribes you to the conversation.
+      await watchers.add(taskId, [actorId, ...mentions]);
       await activity.record({ taskId, actorId, type: 'comment.created', commentId: comment.id });
       await events.append(commentEvent('comment.created', task, actorId, comment));
       return comment;

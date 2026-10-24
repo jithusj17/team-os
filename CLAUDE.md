@@ -35,6 +35,14 @@ Each API module lives in `apps/api/src/modules/<name>/` with four layers. Depend
 - The worker's `OutboxRelay` (single elected leader) publishes events via Redis to every API instance. Clients catch up with `GET /workspaces/:id/events?after=<seq>`.
 - Socket room joins are authorized with `RealtimeAccess`, using the same rules as HTTP.
 
+## Background jobs
+
+- Job handlers live in `src/jobs/` (an interface layer like `http/`): parse the payload, call a use case.
+- The relay also enqueues every event on the `domain-events` queue (job id `workspaceId_seq`); background reactions such as notifications subscribe there instead of being called from use cases.
+- Handlers must be idempotent (jobs retry). Notifications use a `dedupeKey` per user for this.
+- Jobs that fail every retry go to the `dead-letter` queue with their error (`attachDeadLetter`).
+- Recurring jobs are declared in `SCHEDULES` and registered with `upsertJobScheduler` on worker start.
+
 ## Commands
 
 - `docker compose up -d` — start Postgres + Redis

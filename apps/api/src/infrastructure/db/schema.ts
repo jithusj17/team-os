@@ -344,3 +344,62 @@ export const events = pgTable(
       .where(sql`${t.publishedAt} is null`),
   ],
 );
+
+// ---- Watchers and notifications ----
+
+export const taskWatchers = pgTable(
+  'task_watchers',
+  {
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.userId] }), index().on(t.userId)],
+);
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    projectId: uuid('project_id'),
+    taskId: uuid('task_id'),
+    actorId: uuid('actor_id'),
+    data: jsonb('data').notNull(),
+    /** Identifies the cause (event + type), so retried fan-out jobs can't notify twice. */
+    dedupeKey: text('dedupe_key').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    emailedAt: timestamp('emailed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('notifications_user_dedupe_idx').on(t.userId, t.dedupeKey),
+    index('notifications_user_created_idx').on(t.userId, t.createdAt),
+    index('notifications_unread_idx')
+      .on(t.userId)
+      .where(sql`${t.readAt} is null`),
+  ],
+);
+
+export const notificationPreferences = pgTable('notification_preferences', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Notification types the user has turned off. */
+  mutedTypes: text('muted_types')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  emailDigest: boolean('email_digest').notNull().default(true),
+  updatedAt: updatedAt(),
+});

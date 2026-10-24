@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Notification } from './notifications.js';
 
 /**
  * Real-time events. Each is published to the project room (when `projectId` is set) or the
@@ -79,6 +80,8 @@ export interface PresenceUpdate {
 export interface ServerToClientEvents {
   event: (event: WorkspaceEvent) => void;
   presence: (update: PresenceUpdate) => void;
+  /** A new notification for the connected user. */
+  notification: (notification: Notification) => void;
 }
 
 export interface ClientToServerEvents {

@@ -1,5 +1,6 @@
 export * from './events.js';
 export * from './health.js';
+export * from './notifications.js';
 export * from './permissions.js';
 export * from './queues.js';
 export * from './schemas.js';
