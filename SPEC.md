@@ -3,7 +3,7 @@
 An all-in-one team workspace (in the spirit of Jira / Lark): projects, tasks, meetings, docs, calendar, and an AI assistant over the whole workspace.
 
 **Goal:** a real, production-grade backend. A smaller feature set built properly beats a wide feature set built shallowly.
-**Timeline:** 1–2 weeks for v1. Anything marked *Later* is out of scope for v1.
+**Timeline:** 1–2 weeks for v1. Anything marked _Later_ is out of scope for v1.
 
 ---
 
@@ -17,11 +17,13 @@ An all-in-one team workspace (in the spirit of Jira / Lark): projects, tasks, me
 ## 2. v1 features
 
 ### Auth
+
 - OAuth sign-in with Google and GitHub.
 - Server-side sessions (HTTP-only secure cookie, session stored in Redis).
 - Workspace invites by email link (token, expires in 7 days).
 
 ### Projects & tasks (core)
+
 - Projects with a key (e.g. `ENG`) → tasks numbered `ENG-42`.
 - Task fields: title, description (markdown), status (configurable per project), priority, assignee, labels, due date, estimate, parent task (subtasks).
 - **Dependencies**: `blocks / blocked-by` between tasks, including across projects in the same workspace.
@@ -33,29 +35,34 @@ An all-in-one team workspace (in the spirit of Jira / Lark): projects, tasks, me
 - Views: board (kanban), list with filters/sort, and a dependency view.
 
 ### Real-time collaboration
+
 - Live updates over WebSockets: task create/update/move, comments, presence (who is viewing a project/task).
 - Works across multiple API instances (Redis pub/sub adapter).
 - Clients reconnect and resync without losing events (fetch changes since last seen version).
 - Optimistic concurrency: every task has a `version`; stale updates return `409`.
 
 ### Docs
+
 - Workspace / project docs with markdown body, linked to tasks.
 - Version history (save snapshots).
-- *Later:* simultaneous co-editing (CRDT with Yjs).
+- _Later:_ simultaneous co-editing (CRDT with Yjs).
 
 ### Calendar & meetings
+
 - Events with attendees, linked to a project and optionally tasks.
 - Meeting notes as a doc attached to the event.
 - AI meeting summary + extracted action items → one-click create tasks.
-- *Later:* Google Calendar sync.
+- _Later:_ Google Calendar sync.
 
 ### Notifications
+
 - Triggers: assigned, mentioned, comment on watched task, status change, due soon, blocker resolved.
 - Delivered in-app (real-time) and stored in an inbox (read/unread).
 - Per-user preferences; email digest delivered by a background job.
 - Fan-out happens in a queue worker, never in the request path.
 
 ### AI assistant
+
 - **Summaries**: task thread, project status (what's done/blocked/at risk), meeting notes, doc.
 - **Semantic search** over tasks, comments, docs, meetings (pgvector), respecting permissions.
 - **Ask the workspace**: question → retrieve permitted content → answer with citations.
@@ -65,20 +72,21 @@ An all-in-one team workspace (in the spirit of Jira / Lark): projects, tasks, me
 - Indexing runs in a background queue whenever content changes (debounced), not inline.
 
 ### Later (not v1)
+
 Email integration, Google Calendar sync, CRDT co-editing, mobile apps, billing, SSO/SAML.
 
 ## 3. Non-functional requirements
 
-| Area | Target |
-|---|---|
-| API latency | p95 < 150 ms for normal reads, < 300 ms for writes (excluding AI) |
-| AI | stream responses; first token < 2 s; summaries cached until source content changes |
-| Real-time | event delivered to other clients < 500 ms |
-| Permissions | enforced server-side on every endpoint, socket room join, search result, and AI retrieval |
-| Reliability | queue jobs retried with backoff; dead-letter queue; idempotency keys on AI actions |
-| Security | input validation on every endpoint, rate limiting, CSRF protection, no secrets in code |
-| Observability | structured logs with request IDs, health checks, basic metrics |
-| Tests | unit + integration tests for permissions, dependencies, and AI action validation |
+| Area          | Target                                                                                    |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| API latency   | p95 < 150 ms for normal reads, < 300 ms for writes (excluding AI)                         |
+| AI            | stream responses; first token < 2 s; summaries cached until source content changes        |
+| Real-time     | event delivered to other clients < 500 ms                                                 |
+| Permissions   | enforced server-side on every endpoint, socket room join, search result, and AI retrieval |
+| Reliability   | queue jobs retried with backoff; dead-letter queue; idempotency keys on AI actions        |
+| Security      | input validation on every endpoint, rate limiting, CSRF protection, no secrets in code    |
+| Observability | structured logs with request IDs, health checks, basic metrics                            |
+| Tests         | unit + integration tests for permissions, dependencies, and AI action validation          |
 
 ## 4. Tech stack
 
@@ -95,5 +103,6 @@ Email integration, Google Calendar sync, CRDT co-editing, mobile apps, billing, 
 - **Local dev:** Docker Compose for Postgres + Redis.
 
 ## 5. Open questions
+
 - Email provider for invites and digests (Resend / SES / SMTP)?
 - Deployment target (Render, Fly.io, AWS, VPS)?

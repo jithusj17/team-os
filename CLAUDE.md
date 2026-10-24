@@ -3,10 +3,12 @@
 Read `SPEC.md` for what we're building and `PLAN.md` for the phase plan. Work on one phase at a time; don't start the next phase unless asked.
 
 ## Stack
+
 npm workspaces monorepo: `apps/api` (Fastify), `apps/worker` (BullMQ), `apps/web` (React + Vite), `packages/shared` (types, Zod schemas).
 PostgreSQL 16 + pgvector via Drizzle, Redis, Socket.IO, Claude API.
 
 ## Commands
+
 - `docker compose up -d` — start Postgres + Redis
 - `npm run dev` — run all apps
 - `npm test` — run all tests
@@ -14,6 +16,7 @@ PostgreSQL 16 + pgvector via Drizzle, Redis, Socket.IO, Claude API.
 - `npm run db:migrate` / `npm run db:generate`
 
 ## Rules
+
 - TypeScript strict; no `any` without a comment explaining why.
 - Validate every request body/query with Zod schemas from `packages/shared`.
 - Every data access is scoped by `workspaceId`. Every endpoint, socket room join, search, and AI retrieval goes through the central permission check.
