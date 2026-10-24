@@ -60,10 +60,13 @@ Rough budget for 1–2 weeks: ~1 day per phase, phases 7–9 may take longer.
 
 ## Phase 6 — Frontend core
 
-- React app: sign-in, workspace switcher, project list, board, list view, task detail drawer, comments, notifications inbox.
+- Design foundation first: design tokens (light + dark mode), Inter font, icon set, shared components (button, input, select, dialog, dropdown, avatar, badge, toast), real router.
+- App shell in the style of Linear/Lark: sidebar with workspace switcher and navigation, user menu.
+- Replace the Phase 1 placeholder screens: branded sign-in page; members page with avatars, role changes and removal (permission-aware), pending invites with copy link and revoke; invite dialog; workspace settings (rename, delete).
+- React app: project list, board, list view, task detail drawer, comments, notifications inbox.
 - TanStack Query cache updated from socket events.
 
-**Done when:** the core workflow can be done entirely in the UI.
+**Done when:** the core workflow can be done entirely in the UI, and it looks like a polished product, not a prototype.
 
 ## Phase 7 — Docs & calendar/meetings
 
