@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "concurrently -n api,worker,web -c blue,magenta,green \"npm:dev -w @team-os/api\" \"npm:dev -w @team-os/worker\" \"npm:dev -w @team-os/web\"",
+    "dev": "concurrently -n api,worker,web -c blue,magenta,green \"npm:dev -w @team-os/api\" \"npm:dev:worker -w @team-os/api\" \"npm:dev -w @team-os/web\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

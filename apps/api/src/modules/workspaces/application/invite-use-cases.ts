@@ -1,5 +1,6 @@
 import type { InvitableRole } from '@team-os/shared';
 import type { AppUrls, Clock, JobQueue, TokenService } from '../../../shared/application/ports.js';
+import type { EventRepository } from '../../../shared/application/events.js';
 import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { conflict, notFound } from '../../../shared/domain/errors.js';
 import type { UserRepository } from '../../identity/domain/ports.js';
@@ -12,6 +13,7 @@ type Repos = {
   members: MemberRepository;
   workspaces: WorkspaceRepository;
   users: UserRepository;
+  events: EventRepository;
 };
 
 export class CreateInvite {
@@ -129,7 +131,7 @@ export class AcceptInvite {
   /** Accepts an invite for the signed-in user. Their email must match the invited email. */
   async execute(actorId: string, token: string): Promise<{ workspaceId: string }> {
     const { uow, tokens, clock } = this.deps;
-    return uow.transaction(async ({ invites, members, users }) => {
+    return uow.transaction(async ({ invites, members, users, events }) => {
       const invite = await invites.lockByTokenHash(tokens.hash(token));
       if (!invite) throw notFound('invite_not_found', 'Invite not found');
       const actor = await users.findById(actorId);
@@ -139,6 +141,12 @@ export class AcceptInvite {
       assertAcceptable(invite, actor.email, now);
       await members.add(invite.workspaceId, actorId, invite.role);
       await invites.markAccepted(invite.id, now);
+      await events.append({
+        workspaceId: invite.workspaceId,
+        type: 'workspace.members_changed',
+        actorId,
+        payload: { userId: actorId, accessChanged: false },
+      });
       return { workspaceId: invite.workspaceId };
     });
   }

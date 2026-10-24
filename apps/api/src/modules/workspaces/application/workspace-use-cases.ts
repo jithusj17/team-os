@@ -1,11 +1,16 @@
 import type { TokenService } from '../../../shared/application/ports.js';
+import type { EventRepository } from '../../../shared/application/events.js';
 import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { DomainError, conflict, notFound } from '../../../shared/domain/errors.js';
 import type { MemberRepository, WorkspaceRepository } from '../domain/ports.js';
 import { slugWithSuffix, slugify, type WorkspaceView } from '../domain/workspace.js';
 import type { WorkspaceAccess } from './workspace-access.js';
 
-type Repos = { workspaces: WorkspaceRepository; members: MemberRepository };
+type Repos = {
+  workspaces: WorkspaceRepository;
+  members: MemberRepository;
+  events: EventRepository;
+};
 
 const isSlugTaken = (err: unknown) => err instanceof DomainError && err.code === 'slug_taken';
 
@@ -64,9 +69,12 @@ export class UpdateWorkspace {
     const role = await this.deps.access.authorize(actorId, workspaceId, {
       action: 'workspace:update',
     });
-    const ws = await this.deps.uow.repos.workspaces.update(workspaceId, patch);
-    if (!ws) throw notFound('workspace_not_found', 'Workspace not found');
-    return { ...ws, role };
+    return this.deps.uow.transaction(async ({ workspaces, events }) => {
+      const ws = await workspaces.update(workspaceId, patch);
+      if (!ws) throw notFound('workspace_not_found', 'Workspace not found');
+      await events.append({ workspaceId, type: 'workspace.updated', actorId, payload: ws });
+      return { ...ws, role };
+    });
   }
 }
 

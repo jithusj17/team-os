@@ -1,5 +1,6 @@
 import type { ActivityEntry, ListTasksQuery, ProjectAction, UpdateTaskBody } from '@team-os/shared';
 import type { Clock } from '../../../shared/application/ports.js';
+import type { EventRepository } from '../../../shared/application/events.js';
 import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { conflict, notFound, validation } from '../../../shared/domain/errors.js';
 import type { ProjectAccess, ProjectGrant } from '../../projects/application/project-access.js';
@@ -30,10 +31,28 @@ type Repos = {
   dependencies: DependencyRepository;
   statuses: StatusRepository;
   projects: ProjectRepository;
+  events: EventRepository;
 };
 type Deps = { uow: UnitOfWork<Repos>; projectAccess: ProjectAccess; clock: Clock };
 
 export const taskNotFound = () => notFound('task_not_found', 'Task not found');
+
+/** Records a task event in the current transaction; the payload is the task as clients see it. */
+export function recordTaskEvent(
+  events: EventRepository,
+  type: 'task.created' | 'task.updated',
+  task: TaskView,
+  actorId: string,
+) {
+  return events.append({
+    workspaceId: task.workspaceId,
+    projectId: task.projectId,
+    taskId: task.id,
+    type,
+    actorId,
+    payload: task,
+  });
+}
 
 /** Authorizes an action on a task through its project. Hidden tasks are not-found. */
 export class TaskAccess {
@@ -231,7 +250,9 @@ export class CreateTask {
       });
       if (labelIds.length) await repos.tasks.setLabels(task.id, [...new Set(labelIds)]);
       await repos.activity.record({ taskId: task.id, actorId, type: 'task.created' });
-      return (await repos.tasks.findView(task.id))!;
+      const view = (await repos.tasks.findView(task.id))!;
+      await recordTaskEvent(repos.events, 'task.created', view, actorId);
+      return view;
     });
   }
 }
@@ -302,7 +323,22 @@ export class UpdateTask {
       if (Object.keys(changes).length > 0) {
         await repos.activity.record({ taskId, actorId, type: 'task.updated', changes });
       }
-      return (await repos.tasks.findView(taskId))!;
+      const view = (await repos.tasks.findView(taskId))!;
+      await recordTaskEvent(repos.events, 'task.updated', view, actorId);
+
+      // Closing or reopening a blocker changes its dependents' openBlockerCount.
+      const wasClosed = current.completedAt !== null;
+      const isClosed = updated.completedAt !== null;
+      if (wasClosed !== isClosed) {
+        const { blocking } = await repos.dependencies.forTask(taskId);
+        for (const dependent of blocking) {
+          const dependentView = await repos.tasks.findView(dependent.id);
+          if (dependentView) {
+            await recordTaskEvent(repos.events, 'task.updated', dependentView, actorId);
+          }
+        }
+      }
+      return view;
     });
   }
 }
@@ -311,8 +347,18 @@ export class DeleteTask {
   constructor(private readonly deps: Deps & { taskAccess: TaskAccess }) {}
 
   async execute(actorId: string, taskId: string) {
-    await this.deps.taskAccess.authorize(actorId, taskId, 'task:delete');
-    await this.deps.uow.repos.tasks.delete(taskId);
+    const { task } = await this.deps.taskAccess.authorize(actorId, taskId, 'task:delete');
+    await this.deps.uow.transaction(async ({ tasks, events }) => {
+      await tasks.delete(taskId);
+      await events.append({
+        workspaceId: task.workspaceId,
+        projectId: task.projectId,
+        taskId,
+        type: 'task.deleted',
+        actorId,
+        payload: { id: taskId },
+      });
+    });
   }
 }
 

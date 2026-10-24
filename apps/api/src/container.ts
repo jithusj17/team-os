@@ -83,6 +83,12 @@ import {
   TaskAccess,
   UpdateTask,
 } from './modules/tasks/application/task-use-cases.js';
+import {
+  ListEventsSince,
+  Presence,
+  RealtimeAccess,
+} from './modules/realtime/application/realtime-use-cases.js';
+import { RedisPresenceStore } from './modules/realtime/infrastructure/redis-presence-store.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -115,6 +121,12 @@ export function createContainer(deps: {
   const taskAccess = new TaskAccess({ tasks: uow.repos.tasks, projectAccess });
   const projectDeps = { uow, projectAccess };
   const taskDeps = { uow, projectAccess, taskAccess, clock };
+  const realtimeAccess = new RealtimeAccess({
+    workspaceAccess: access,
+    projectAccess,
+    taskAccess,
+    uow,
+  });
 
   return {
     uow,
@@ -175,6 +187,11 @@ export function createContainer(deps: {
       addDependency: new AddDependency(taskDeps),
       removeDependency: new RemoveDependency(taskDeps),
       dependencyGraph: new GetDependencyGraph(taskDeps),
+    },
+    realtime: {
+      access: realtimeAccess,
+      listEvents: new ListEventsSince({ uow, workspaceAccess: access }),
+      presence: new Presence({ access: realtimeAccess, store: new RedisPresenceStore(redis) }),
     },
     labels: {
       list: new ListLabels({ uow, workspaceAccess: access }),

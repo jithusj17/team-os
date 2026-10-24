@@ -90,7 +90,7 @@ Email integration, Google Calendar sync, CRDT co-editing, mobile apps, billing, 
 
 ## 4. Tech stack
 
-- **Monorepo:** npm workspaces — `apps/api`, `apps/web`, `apps/worker`, `packages/shared`.
+- **Monorepo:** npm workspaces — `apps/api` (server + worker entry points), `apps/web`, `packages/shared`.
 - **Backend:** Node.js + TypeScript, Fastify, Zod validation.
 - **Database:** PostgreSQL 16 + pgvector, Drizzle ORM + migrations.
 - **Cache / sessions / pub-sub:** Redis.

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { EmailJob } from '@team-os/shared';
 import type { Clock, JobQueue, TokenService } from '../../src/shared/application/ports.js';
+import type { EventRepository, NewEvent } from '../../src/shared/application/events.js';
 import type { UnitOfWork } from '../../src/shared/application/unit-of-work.js';
 import { conflict } from '../../src/shared/domain/errors.js';
 import type { UserRepository } from '../../src/modules/identity/domain/ports.js';
@@ -21,6 +22,7 @@ interface State {
   workspaces: Workspace[];
   members: { workspaceId: string; userId: string; role: WorkspaceRole; joinedAt: Date }[];
   invites: (Invite & { tokenHash: string })[];
+  events: (NewEvent & { seq: number })[];
 }
 
 const emptyState = (): State => ({
@@ -29,6 +31,7 @@ const emptyState = (): State => ({
   workspaces: [],
   members: [],
   invites: [],
+  events: [],
 });
 
 class InMemoryUsers implements UserRepository {
@@ -173,12 +176,46 @@ class InMemoryInvites implements InviteRepository {
   }
 }
 
+class InMemoryEvents implements EventRepository {
+  constructor(private readonly s: () => State) {}
+  private forWorkspace(workspaceId: string) {
+    return this.s().events.filter((e) => e.workspaceId === workspaceId);
+  }
+  async append(event: NewEvent) {
+    const seq = (await this.latestSeq(event.workspaceId)) + 1;
+    this.s().events.push({ ...event, seq });
+  }
+  async listSince(workspaceId: string, afterSeq: number, limit: number) {
+    return this.forWorkspace(workspaceId)
+      .filter((e) => e.seq > afterSeq)
+      .slice(0, limit)
+      .map((e) => ({
+        workspaceId: e.workspaceId,
+        seq: e.seq,
+        type: e.type,
+        projectId: e.projectId ?? null,
+        taskId: e.taskId ?? null,
+        actorId: e.actorId,
+        payload: e.payload,
+        createdAt: new Date(),
+      }));
+  }
+  async latestSeq(workspaceId: string) {
+    return Math.max(0, ...this.forWorkspace(workspaceId).map((e) => e.seq));
+  }
+  async oldestSeq(workspaceId: string) {
+    const seqs = this.forWorkspace(workspaceId).map((e) => e.seq);
+    return seqs.length ? Math.min(...seqs) : null;
+  }
+}
+
 function createRepos(s: () => State) {
   return {
     users: new InMemoryUsers(s),
     workspaces: new InMemoryWorkspaces(s),
     members: new InMemoryMembers(s),
     invites: new InMemoryInvites(s),
+    events: new InMemoryEvents(s),
   };
 }
 

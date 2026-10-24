@@ -1,10 +1,13 @@
+import type { EventRepository } from '../../../shared/application/events.js';
 import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { conflict, notFound, validation } from '../../../shared/domain/errors.js';
-import type { NewStatus, Status } from '../domain/project.js';
+import type { NewStatus, Project, Status } from '../domain/project.js';
 import type { StatusRepository } from '../domain/ports.js';
 import type { ProjectAccess } from './project-access.js';
+import { projectEvent } from './project-use-cases.js';
 
-type Deps = { uow: UnitOfWork<{ statuses: StatusRepository }>; projectAccess: ProjectAccess };
+type Repos = { statuses: StatusRepository; events: EventRepository };
+type Deps = { uow: UnitOfWork<Repos>; projectAccess: ProjectAccess };
 
 const statusNotFound = () => notFound('status_not_found', 'Status not found');
 
@@ -15,6 +18,20 @@ async function requireStatus(statuses: StatusRepository, projectId: string, stat
   return status;
 }
 
+/** Statuses are a small ordered list, so every change publishes the whole list. */
+async function recordStatusesChanged(
+  { statuses, events }: Repos,
+  project: Project,
+  actorId: string,
+  extra: Record<string, unknown> = {},
+) {
+  const list = await statuses.listForProject(project.id);
+  await events.append(
+    projectEvent('project.statuses_changed', project, actorId, { statuses: list, ...extra }),
+  );
+  return list;
+}
+
 export class CreateStatus {
   constructor(private readonly deps: Deps) {}
 
@@ -23,11 +40,16 @@ export class CreateStatus {
     projectId: string,
     input: Omit<NewStatus, 'position'>,
   ): Promise<Status> {
-    await this.deps.projectAccess.authorize(actorId, projectId, 'status:manage');
-    return this.deps.uow.transaction(async ({ statuses }) => {
-      const existing = await statuses.listForProject(projectId);
+    const { project } = await this.deps.projectAccess.authorize(
+      actorId,
+      projectId,
+      'status:manage',
+    );
+    return this.deps.uow.transaction(async (repos) => {
+      const existing = await repos.statuses.listForProject(projectId);
       const position = Math.max(-1, ...existing.map((s) => s.position)) + 1;
-      const [created] = await statuses.createMany(projectId, [{ ...input, position }]);
+      const [created] = await repos.statuses.createMany(projectId, [{ ...input, position }]);
+      await recordStatusesChanged(repos, project, actorId);
       return created!;
     });
   }
@@ -42,12 +64,18 @@ export class UpdateStatus {
     statusId: string,
     patch: Partial<Omit<NewStatus, 'position'>>,
   ): Promise<Status> {
-    await this.deps.projectAccess.authorize(actorId, projectId, 'status:manage');
-    const { statuses } = this.deps.uow.repos;
-    await requireStatus(statuses, projectId, statusId);
-    const updated = await statuses.update(statusId, patch);
-    if (!updated) throw statusNotFound();
-    return updated;
+    const { project } = await this.deps.projectAccess.authorize(
+      actorId,
+      projectId,
+      'status:manage',
+    );
+    return this.deps.uow.transaction(async (repos) => {
+      await requireStatus(repos.statuses, projectId, statusId);
+      const updated = await repos.statuses.update(statusId, patch);
+      if (!updated) throw statusNotFound();
+      await recordStatusesChanged(repos, project, actorId);
+      return updated;
+    });
   }
 }
 
@@ -55,9 +83,13 @@ export class ReorderStatuses {
   constructor(private readonly deps: Deps) {}
 
   async execute(actorId: string, projectId: string, orderedIds: string[]): Promise<Status[]> {
-    await this.deps.projectAccess.authorize(actorId, projectId, 'status:manage');
-    return this.deps.uow.transaction(async ({ statuses }) => {
-      const current = await statuses.listForProject(projectId);
+    const { project } = await this.deps.projectAccess.authorize(
+      actorId,
+      projectId,
+      'status:manage',
+    );
+    return this.deps.uow.transaction(async (repos) => {
+      const current = await repos.statuses.listForProject(projectId);
       const same =
         orderedIds.length === current.length &&
         new Set(orderedIds).size === orderedIds.length &&
@@ -65,8 +97,8 @@ export class ReorderStatuses {
       if (!same) {
         throw validation('invalid_status_order', "List every one of the project's statuses once");
       }
-      await statuses.setPositions(projectId, orderedIds);
-      return statuses.listForProject(projectId);
+      await repos.statuses.setPositions(projectId, orderedIds);
+      return recordStatusesChanged(repos, project, actorId);
     });
   }
 }
@@ -76,8 +108,13 @@ export class DeleteStatus {
 
   /** Deletes a status. Its tasks must be moved to `moveTo` if it has any. */
   async execute(actorId: string, projectId: string, statusId: string, moveTo?: string) {
-    await this.deps.projectAccess.authorize(actorId, projectId, 'status:manage');
-    await this.deps.uow.transaction(async ({ statuses }) => {
+    const { project } = await this.deps.projectAccess.authorize(
+      actorId,
+      projectId,
+      'status:manage',
+    );
+    await this.deps.uow.transaction(async (repos) => {
+      const { statuses } = repos;
       await requireStatus(statuses, projectId, statusId);
       const all = await statuses.listForProject(projectId);
       if (all.length === 1) throw conflict('last_status', 'A project needs at least one status');
@@ -89,6 +126,8 @@ export class DeleteStatus {
         throw conflict('status_in_use', "Move this status's tasks to another status first");
       }
       await statuses.deleteAndReassign(statusId, moveTo ?? null);
+      // Moved tasks changed status in bulk; clients refetch the project's tasks.
+      await recordStatusesChanged(repos, project, actorId, { tasksMoved: moveTo !== undefined });
     });
   }
 }

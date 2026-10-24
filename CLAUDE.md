@@ -1,11 +1,13 @@
 # Team OS
 
-Read `SPEC.md` for what we're building and `PLAN.md` for the phase plan. Work on one phase at a time; don't start the next phase unless asked.
+Read `SPEC.md` for what we're building and `PLAN.md` for the phase plan. Work on one phase at a time, in order.
 
 ## Stack
 
-npm workspaces monorepo: `apps/api` (Fastify), `apps/worker` (BullMQ), `apps/web` (React + Vite), `packages/shared` (types, Zod schemas).
-PostgreSQL 16 + pgvector via Drizzle, Redis, Socket.IO, Claude API.
+npm workspaces monorepo: `apps/api` (backend), `apps/web` (React + Vite), `packages/shared` (types, Zod schemas, permission rules).
+PostgreSQL 16 + pgvector via Drizzle, Redis, BullMQ, Socket.IO, Claude API.
+
+`apps/api` has two entry points sharing one codebase: `src/server.ts` (HTTP + WebSocket) and `src/worker.ts` (BullMQ jobs + outbox relay).
 
 ## Backend architecture: clean architecture + repository pattern
 
@@ -25,10 +27,18 @@ Each API module lives in `apps/api/src/modules/<name>/` with four layers. Depend
 - Errors: throw `DomainError` helpers (`notFound`, `forbidden`, `conflict`, ...) from `shared/domain/errors.ts`; never HTTP status codes outside `http/`.
 - Tests: use-case logic is unit tested with in-memory repositories (`test/unit/`); HTTP + database behaviour is integration tested (`test/*.test.ts`).
 
+## Events and real-time
+
+- Every state change appends an event with `repos.events.append(...)` **inside the same transaction** (transactional outbox). Never publish directly from a use case.
+- Events get a gap-free per-workspace `seq`. Payload = the changed entity as clients see it, or `{ id }` for deletions. Set `projectId` for project-scoped events so they only reach that project's room.
+- If a change can reduce someone's access, put `{ userId, accessChanged: true }` in the payload; the publisher disconnects them so they re-authorize.
+- The worker's `OutboxRelay` (single elected leader) publishes events via Redis to every API instance. Clients catch up with `GET /workspaces/:id/events?after=<seq>`.
+- Socket room joins are authorized with `RealtimeAccess`, using the same rules as HTTP.
+
 ## Commands
 
 - `docker compose up -d` — start Postgres + Redis
-- `npm run dev` — run all apps
+- `npm run dev` — run API server, worker and web app
 - `npm test` — run all tests
 - `npm run lint` / `npm run typecheck`
 - `npm run db:migrate` / `npm run db:generate`
@@ -39,7 +49,6 @@ Each API module lives in `apps/api/src/modules/<name>/` with four layers. Depend
 - Validate every request body/query with Zod schemas from `packages/shared`.
 - Every data access is scoped by `workspaceId`. Every endpoint, socket room join, search, and AI retrieval goes through the central permission check.
 - Side effects (notifications, indexing, emails, AI jobs) go to a queue, not the request path.
-- Emit real-time events only after the DB transaction commits.
 - Schema changes go through Drizzle migrations; never edit an applied migration.
 - Secrets come from env vars (`.env`, never committed); update `.env.example` when adding one.
 - Before saying a phase is done: run lint, typecheck, and tests, and report the results.

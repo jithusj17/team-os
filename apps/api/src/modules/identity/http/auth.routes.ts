@@ -117,6 +117,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/auth/logout', async (req, reply) => {
     await identity.signOut.execute({ sessionToken: req.auth?.sessionToken });
+    if (req.auth) app.realtime.disconnectSession(req.auth.sessionToken);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.code(204).send();
   });

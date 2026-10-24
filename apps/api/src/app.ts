@@ -4,14 +4,16 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Config } from './config.js';
 import { createContainer, type Container } from './container.js';
-import { authPlugin } from './http/auth.plugin.js';
+import { authPlugin, requireAuth } from './http/auth.plugin.js';
 import { registerErrorHandlers } from './http/error-handler.js';
 import { healthRoutes } from './http/health.routes.js';
 import { createDb, type Sql } from './infrastructure/db/client.js';
 import { createRedis, type RedisClient } from './infrastructure/redis.js';
 import type { OAuthProvider } from './modules/identity/domain/ports.js';
 import { authRoutes } from './modules/identity/http/auth.routes.js';
+import { attachRealtime } from './http/realtime.js';
 import { projectRoutes } from './modules/projects/http/projects.routes.js';
+import { eventRoutes } from './modules/realtime/http/events.routes.js';
 import { taskRoutes } from './modules/tasks/http/tasks.routes.js';
 import { workspaceRoutes } from './modules/workspaces/http/workspaces.routes.js';
 
@@ -106,6 +108,14 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
   await app.register(workspaceRoutes);
   await app.register(projectRoutes);
   await app.register(taskRoutes);
+  await app.register(async (scoped) => {
+    scoped.addHook('onRequest', async (req) => {
+      requireAuth(req);
+    });
+    await scoped.register(eventRoutes);
+  });
+
+  await attachRealtime(app);
 
   return app;
 }

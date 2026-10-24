@@ -11,6 +11,7 @@ import { DrizzleTaskRepository } from '../../modules/tasks/infrastructure/drizzl
 import { DrizzleInviteRepository } from '../../modules/workspaces/infrastructure/drizzle-invite-repository.js';
 import { DrizzleMemberRepository } from '../../modules/workspaces/infrastructure/drizzle-member-repository.js';
 import { DrizzleWorkspaceRepository } from '../../modules/workspaces/infrastructure/drizzle-workspace-repository.js';
+import { DrizzleEventRepository } from '../outbox/drizzle-event-repository.js';
 import type { DbExecutor } from './executor.js';
 
 /** Every repository, bound to one executor (the database or a transaction). */
@@ -28,6 +29,7 @@ export function createRepositories(db: DbExecutor) {
     comments: new DrizzleCommentRepository(db),
     activity: new DrizzleActivityRepository(db),
     dependencies: new DrizzleDependencyRepository(db),
+    events: new DrizzleEventRepository(db),
   };
 }
 

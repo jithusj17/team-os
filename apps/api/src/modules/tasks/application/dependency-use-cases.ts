@@ -1,16 +1,18 @@
 import type { DependencyGraph } from '@team-os/shared';
+import type { EventRepository } from '../../../shared/application/events.js';
 import type { UnitOfWork } from '../../../shared/application/unit-of-work.js';
 import { conflict, notFound, validation } from '../../../shared/domain/errors.js';
 import type { ProjectAccess } from '../../projects/application/project-access.js';
 import { criticalPath, type DependencyTask } from '../domain/dependency.js';
 import type { ActivityRepository, DependencyRepository, TaskRepository } from '../domain/ports.js';
-import type { TaskAccess } from './task-use-cases.js';
+import { recordTaskEvent, type TaskAccess } from './task-use-cases.js';
 
 type Deps = {
   uow: UnitOfWork<{
     tasks: TaskRepository;
     dependencies: DependencyRepository;
     activity: ActivityRepository;
+    events: EventRepository;
   }>;
   taskAccess: TaskAccess;
   projectAccess: ProjectAccess;
@@ -64,7 +66,8 @@ export class AddDependency {
       blockerNotFound,
     );
 
-    await uow.transaction(async ({ dependencies, activity }) => {
+    await uow.transaction(async (repos) => {
+      const { dependencies, activity } = repos;
       // Two concurrent inserts (A blocks B, B blocks A) could each pass the cycle check alone;
       // a workspace-wide lock makes the check-then-insert atomic.
       await dependencies.lockWorkspace(task.workspaceId);
@@ -83,8 +86,29 @@ export class AddDependency {
         type: 'dependency.added',
         changes: { blockedBy: { from: null, to: blockerId } },
       });
+      await recordDependencyEvents(repos, 'dependency.added', taskId, blockerId, actorId);
     });
   }
+}
+
+/** The dependency event, plus the blocked task's new state (its openBlockerCount changed). */
+async function recordDependencyEvents(
+  repos: { tasks: TaskRepository; events: EventRepository },
+  type: 'dependency.added' | 'dependency.removed',
+  blockedId: string,
+  blockerId: string,
+  actorId: string,
+) {
+  const blocked = (await repos.tasks.findView(blockedId))!;
+  await repos.events.append({
+    workspaceId: blocked.workspaceId,
+    projectId: blocked.projectId,
+    taskId: blockedId,
+    type,
+    actorId,
+    payload: { blockerId, blockedId },
+  });
+  await recordTaskEvent(repos.events, 'task.updated', blocked, actorId);
 }
 
 export class RemoveDependency {
@@ -92,16 +116,17 @@ export class RemoveDependency {
 
   async execute(actorId: string, taskId: string, blockerId: string) {
     await this.deps.taskAccess.authorize(actorId, taskId, 'task:update');
-    await this.deps.uow.transaction(async ({ dependencies, activity }) => {
-      if (!(await dependencies.remove({ blockerId, blockedId: taskId }))) {
+    await this.deps.uow.transaction(async (repos) => {
+      if (!(await repos.dependencies.remove({ blockerId, blockedId: taskId }))) {
         throw notFound('dependency_not_found', 'Dependency not found');
       }
-      await activity.record({
+      await repos.activity.record({
         taskId,
         actorId,
         type: 'dependency.removed',
         changes: { blockedBy: { from: blockerId, to: null } },
       });
+      await recordDependencyEvents(repos, 'dependency.removed', taskId, blockerId, actorId);
     });
   }
 }

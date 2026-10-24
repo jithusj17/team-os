@@ -1,20 +1,19 @@
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { pino } from 'pino';
-import { z } from 'zod';
 import { emailJob, QUEUES } from '@team-os/shared';
+import { loadConfig } from './config.js';
+import { createDb } from './infrastructure/db/client.js';
+import { OutboxRelay } from './infrastructure/outbox/outbox-relay.js';
+import { SocketIoEventPublisher } from './modules/realtime/infrastructure/socket-io-event-publisher.js';
 
-const env = z
-  .object({
-    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    LOG_LEVEL: z.string().default('info'),
-    REDIS_URL: z.url(),
-  })
-  .parse(process.env);
+// The worker process: background jobs and the outbox relay. Same codebase as the API server,
+// different entry point, so both share the domain and infrastructure layers.
 
+const config = loadConfig();
 const log = pino({
-  level: env.LOG_LEVEL,
-  ...(env.NODE_ENV === 'development' && {
+  level: config.LOG_LEVEL,
+  ...(config.NODE_ENV === 'development' && {
     transport: {
       target: 'pino-pretty',
       options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
@@ -22,17 +21,14 @@ const log = pino({
   }),
 });
 
+const { sql } = createDb(config.DATABASE_URL);
 // BullMQ workers use blocking commands, so they require maxRetriesPerRequest: null.
-const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+const emitterRedis = new Redis(config.REDIS_URL);
+
+const relay = new OutboxRelay(sql, new SocketIoEventPublisher(emitterRedis), log);
 
 const workers = [
-  new Worker(
-    QUEUES.system,
-    async (job) => {
-      log.info({ jobId: job.id, name: job.name }, 'system job');
-    },
-    { connection },
-  ),
   new Worker(
     QUEUES.email,
     async (job) => {
@@ -58,13 +54,14 @@ for (const worker of workers) {
   worker.on('error', (err) => log.error({ queue: worker.name, err }, 'Worker error'));
 }
 
+await relay.start();
 log.info({ queues: workers.map((w) => w.name) }, 'Worker started');
 
 const shutdown = async (signal: string) => {
   log.info({ signal }, 'Shutting down worker');
   // close() waits for in-flight jobs to finish so they aren't left half-done.
-  await Promise.all(workers.map((w) => w.close()));
-  await connection.quit();
+  await Promise.all([relay.stop(), ...workers.map((w) => w.close())]);
+  await Promise.allSettled([connection.quit(), emitterRedis.quit(), sql.end({ timeout: 5 })]);
   process.exit(0);
 };
 process.once('SIGINT', () => void shutdown('SIGINT'));

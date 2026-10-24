@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -65,6 +66,8 @@ export const workspaces = pgTable('workspaces', {
   name: text('name').notNull(),
   slug: citext('slug').notNull().unique(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  /** Last event sequence number issued; see `events`. */
+  eventSeq: bigint('event_seq', { mode: 'number' }).notNull().default(0),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -306,5 +309,38 @@ export const taskDependencies = pgTable(
     primaryKey({ columns: [t.blockerId, t.blockedId] }),
     index().on(t.blockedId),
     check('task_dependencies_not_self', sql`${t.blockerId} <> ${t.blockedId}`),
+  ],
+);
+
+// ---- Events (transactional outbox + sync log) ----
+
+/**
+ * Every change is recorded here in the same transaction as the change itself. The relay
+ * publishes unpublished rows to real-time clients and background jobs; clients that were
+ * offline catch up by reading events after the last `seq` they saw.
+ */
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Gap-free, per-workspace order, issued under the workspace row lock. */
+    seq: bigint('seq', { mode: 'number' }).notNull(),
+    type: text('type').notNull(),
+    // Not foreign keys: events outlive the rows they describe (e.g. task.deleted).
+    projectId: uuid('project_id'),
+    taskId: uuid('task_id'),
+    actorId: uuid('actor_id'),
+    payload: jsonb('payload').notNull(),
+    createdAt: createdAt(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('events_workspace_seq_idx').on(t.workspaceId, t.seq),
+    index('events_unpublished_idx')
+      .on(t.createdAt)
+      .where(sql`${t.publishedAt} is null`),
   ],
 );
