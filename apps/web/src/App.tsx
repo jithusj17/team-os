@@ -1,30 +1,40 @@
 import { useQuery } from '@tanstack/react-query';
-import { healthResponse } from '@team-os/shared';
+import { meResponse } from '@team-os/shared';
+import { api, ApiError, setCsrfToken } from './api';
+import { usePath } from './router';
+import { InvitePage } from './pages/InvitePage';
+import { LoginPage } from './pages/LoginPage';
+import { WorkspacesPage } from './pages/WorkspacesPage';
 
-async function fetchHealth() {
-  const res = await fetch('/api/health');
-  // /health returns 503 with a valid body when degraded, so parse either way.
-  return healthResponse.parse(await res.json());
+export function useMe() {
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      try {
+        const me = await api('/auth/me', meResponse);
+        setCsrfToken(me.csrfToken);
+        return me;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) return null;
+        throw err;
+      }
+    },
+  });
 }
 
 export function App() {
-  const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth, refetchInterval: 10_000 });
+  const path = usePath();
+  const me = useMe();
 
-  return (
-    <main className="mx-auto max-w-xl p-8 font-sans">
-      <h1 className="text-2xl font-semibold">Team OS</h1>
-      <section className="mt-6 rounded-lg border border-gray-200 p-4">
-        <h2 className="text-sm font-medium text-gray-500">System status</h2>
-        {health.isPending && <p className="mt-2">Checking…</p>}
-        {health.isError && <p className="mt-2 text-red-600">API unreachable</p>}
-        {health.data && (
-          <ul className="mt-2 space-y-1">
-            <li>Overall: {health.data.status}</li>
-            <li>Database: {health.data.checks.database}</li>
-            <li>Redis: {health.data.checks.redis}</li>
-          </ul>
-        )}
-      </section>
-    </main>
-  );
+  if (path === '/login') return <LoginPage />;
+  if (me.isPending) return <p className="p-8 text-gray-500">Loading…</p>;
+  if (me.isError) return <p className="p-8 text-red-600">Could not reach the server.</p>;
+  if (!me.data) {
+    window.location.replace(`/login?returnTo=${encodeURIComponent(path)}`);
+    return null;
+  }
+
+  const invite = path.match(/^\/invites\/([^/]+)$/);
+  if (invite) return <InvitePage token={invite[1]!} />;
+  return <WorkspacesPage me={me.data} />;
 }

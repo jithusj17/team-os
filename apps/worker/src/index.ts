@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { pino } from 'pino';
 import { z } from 'zod';
-import { QUEUES } from '@team-os/shared';
+import { emailJob, QUEUES } from '@team-os/shared';
 
 const env = z
   .object({
@@ -32,6 +32,19 @@ const workers = [
       log.info({ jobId: job.id, name: job.name }, 'system job');
     },
     { connection },
+  ),
+  new Worker(
+    QUEUES.email,
+    async (job) => {
+      const email = emailJob.parse(job.data);
+      // No email provider is configured yet (see SPEC.md open questions), so delivery is
+      // logged. Swap this for the real provider call; retries/backoff are already in place.
+      log.info(
+        { jobId: job.id, type: email.type, to: email.to, acceptUrl: email.acceptUrl },
+        'Email not sent: no provider configured',
+      );
+    },
+    { connection, concurrency: 5 },
   ),
 ];
 
