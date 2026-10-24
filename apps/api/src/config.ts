@@ -29,6 +29,11 @@ const envSchema = z
     /** Email-only sign-in for local development before OAuth apps are set up. */
     DEV_LOGIN_ENABLED: booleanString,
 
+    /** Embeddings for semantic search. 'none' keeps search keyword-only. */
+    EMBEDDINGS_PROVIDER: z.enum(['none', 'voyage']).default('none'),
+    VOYAGE_API_KEY: z.string().min(1).optional(),
+    EMBEDDINGS_MODEL: z.string().min(1).default('voyage-3.5'),
+
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   })
@@ -43,6 +48,10 @@ const envSchema = z
   .refine((c) => Boolean(c.GITHUB_CLIENT_ID) === Boolean(c.GITHUB_CLIENT_SECRET), {
     message: 'Set both GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET, or neither',
     path: ['GITHUB_CLIENT_SECRET'],
+  })
+  .refine((c) => c.EMBEDDINGS_PROVIDER !== 'voyage' || Boolean(c.VOYAGE_API_KEY), {
+    message: 'Set VOYAGE_API_KEY to use EMBEDDINGS_PROVIDER=voyage',
+    path: ['VOYAGE_API_KEY'],
   })
   .transform((c) => ({ ...c, API_PUBLIC_URL: c.API_PUBLIC_URL ?? `${c.WEB_ORIGIN}/api` }));
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { EmailJob } from '@team-os/shared';
+import type { EmailJob, SearchIndexJob } from '@team-os/shared';
 import type { Clock, JobQueue, TokenService } from '../../src/shared/application/ports.js';
 import type { EventRepository, NewEvent } from '../../src/shared/application/events.js';
 import type { UnitOfWork } from '../../src/shared/application/unit-of-work.js';
@@ -238,8 +238,12 @@ export class InMemoryUnitOfWork implements UnitOfWork<InMemoryRepos> {
 
 export class FakeJobQueue implements JobQueue {
   readonly emails: EmailJob[] = [];
+  readonly indexJobs: SearchIndexJob[] = [];
   async sendEmail(job: EmailJob) {
     this.emails.push(job);
+  }
+  async indexForSearch(job: SearchIndexJob) {
+    this.indexJobs.push(job);
   }
 }
 

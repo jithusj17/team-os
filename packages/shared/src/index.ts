@@ -5,4 +5,5 @@ export * from './notifications.js';
 export * from './permissions.js';
 export * from './queues.js';
 export * from './schemas.js';
+export * from './search-schemas.js';
 export * from './work-schemas.js';

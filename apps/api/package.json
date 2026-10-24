@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=../../.env src/infrastructure/db/migrate.ts",
-    "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts"
+    "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
+    "reindex": "tsx --env-file-if-exists=../../.env src/scripts/reindex.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.3",

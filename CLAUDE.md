@@ -61,3 +61,9 @@ Each API module lives in `apps/api/src/modules/<name>/` with four layers. Depend
 - Secrets come from env vars (`.env`, never committed); update `.env.example` when adding one.
 - Before saying a phase is done: run lint, typecheck, and tests, and report the results.
 - Write integration tests for permissions and business rules, not just happy paths.
+
+## Search
+
+- `search_index` holds chunks of tasks, comments, docs and meetings. Access is enforced in the SQL (`accessFilter`): project rows need project access, project-less rows need a non-guest, and `allowed_user_ids` (meeting attendees) always pass. Never filter results after the query.
+- Indexing is event-driven: `ScheduleIndexing` maps events to debounced `search-index` jobs; `IndexSource` re-reads the current state and skips unchanged content by hash. New searchable entities need a loader in `IndexSource` and a mapping in `indexJobFor`.
+- Embeddings are optional (`EMBEDDINGS_PROVIDER=voyage` + `VOYAGE_API_KEY`); without them search is keyword-only. Run `npm run reindex` after changing providers.

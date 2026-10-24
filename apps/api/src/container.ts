@@ -122,6 +122,13 @@ import {
   RespondToMeeting,
   UpdateMeeting,
 } from './modules/meetings/application/meeting-use-cases.js';
+import {
+  IndexSource,
+  ScheduleIndexing,
+  SearchWorkspace,
+} from './modules/search/application/search-use-cases.js';
+import type { EmbeddingProvider } from './modules/search/domain/ports.js';
+import { embeddingsFromConfig } from './modules/search/infrastructure/embedding-providers.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -133,10 +140,13 @@ export function createContainer(deps: {
   config: Config;
   db: DbExecutor;
   redis: RedisClient;
-  log: Pick<Logger, 'error'>;
+  log: Pick<Logger, 'error' | 'warn'>;
   oauthProviders?: OAuthProvider[];
+  /** Overrides the provider chosen from config (tests use a deterministic fake). */
+  embeddings?: EmbeddingProvider;
 }) {
   const { config, db, redis, log } = deps;
+  const embeddings = deps.embeddings ?? embeddingsFromConfig(config);
 
   const uow = new DrizzleUnitOfWork(db);
   const tokens = new CryptoTokenService();
@@ -264,6 +274,12 @@ export function createContainer(deps: {
       respond: new RespondToMeeting(meetingDeps),
       linkTask: new LinkMeetingTask(meetingDeps),
       openNotes: new OpenMeetingNotes(meetingDeps),
+    },
+    search: {
+      embeddings,
+      scheduleIndexing: new ScheduleIndexing({ jobs }),
+      indexSource: new IndexSource({ uow, embeddings, tokens }),
+      search: new SearchWorkspace({ uow, workspaceAccess: access, embeddings, log }),
     },
     realtime: {
       access: realtimeAccess,

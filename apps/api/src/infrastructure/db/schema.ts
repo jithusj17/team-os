@@ -17,6 +17,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
@@ -514,4 +515,54 @@ export const meetingTaskLinks = pgTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.meetingId, t.taskId] }), index().on(t.taskId)],
+);
+
+// ---- Search index ----
+
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
+
+export const EMBEDDING_DIMENSIONS = 1024;
+
+/**
+ * One row per chunk of searchable content (task, comment, doc, meeting). Access is decided at
+ * query time: rows in a project are visible to people who can see the project; rows without a
+ * project to non-guest members; and `allowed_user_ids` (e.g. meeting attendees) always.
+ */
+export const searchIndex = pgTable(
+  'search_index',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id'),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    /** For comments: the task they belong to (to clean up and to link results). */
+    taskId: uuid('task_id'),
+    chunkIndex: integer('chunk_index').notNull(),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    allowedUserIds: uuid('allowed_user_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    contentHash: text('content_hash').notNull(),
+    tsv: tsvector('tsv')
+      .notNull()
+      // Stemmed words ("billing" ~ "bills") plus exact words, so typed prefixes like "sett" still
+      // match "settings" (whose stem is "set").
+      .generatedAlwaysAs(
+        sql`setweight(to_tsvector('english', title), 'A') || setweight(to_tsvector('simple', title), 'A') || setweight(to_tsvector('english', content), 'B') || setweight(to_tsvector('simple', content), 'B')`,
+      ),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('search_index_source_chunk_idx').on(t.sourceType, t.sourceId, t.chunkIndex),
+    index('search_index_workspace_idx').on(t.workspaceId),
+    index('search_index_task_idx').on(t.taskId),
+    index('search_index_tsv_idx').using('gin', t.tsv),
+    index('search_index_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
+  ],
 );

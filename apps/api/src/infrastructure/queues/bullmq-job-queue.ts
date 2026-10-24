@@ -1,7 +1,7 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import { QUEUES, type EmailJob, type QueueName } from '@team-os/shared';
+import { QUEUES, type EmailJob, type QueueName, type SearchIndexJob } from '@team-os/shared';
 import type { JobQueue } from '../../shared/application/ports.js';
 
 const defaultJobOptions: JobsOptions = {
@@ -34,6 +34,17 @@ export class BullMqJobQueue implements JobQueue {
 
   async sendEmail(job: EmailJob) {
     await this.get(QUEUES.email).add(job.type, job);
+  }
+
+  async indexForSearch(job: SearchIndexJob) {
+    const id =
+      job.kind === 'source' ? `${job.sourceType}_${job.sourceId}` : `project_${job.projectId}`;
+    await this.get(QUEUES.searchIndex).add(job.kind, job, {
+      jobId: id,
+      delay: 1500,
+      // A completed job must not keep its id, or later edits to the same source would be ignored.
+      removeOnComplete: true,
+    });
   }
 
   /** Exposed for tests and admin tooling. */

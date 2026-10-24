@@ -1,7 +1,13 @@
 import { Queue, Worker, type Job, type Processor } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import { emailJob, QUEUES, workspaceEvent, type DeadLetterJob } from '@team-os/shared';
+import {
+  emailJob,
+  QUEUES,
+  searchIndexJob,
+  workspaceEvent,
+  type DeadLetterJob,
+} from '@team-os/shared';
 import type { Container } from '../container.js';
 
 // The job interface layer: like http/, it only parses input and calls use cases.
@@ -59,9 +65,18 @@ export async function startWorkers(deps: { container: Container; connection: Red
       async (job) => {
         const event = workspaceEvent.parse(job.data);
         const sent = await container.notifications.fanOut.execute(event);
+        await container.search.scheduleIndexing.execute(event);
         return { notifications: sent.length };
       },
       10,
+    ],
+    [
+      QUEUES.searchIndex,
+      async (job) => ({
+        result: await container.search.indexSource.execute(searchIndexJob.parse(job.data)),
+      }),
+      // Embedding calls are rate-limited by the provider; a few at a time is plenty.
+      3,
     ],
     [
       QUEUES.notifications,

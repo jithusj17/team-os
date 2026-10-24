@@ -15,6 +15,7 @@ import { DrizzleInviteRepository } from '../../modules/workspaces/infrastructure
 import { DrizzleMemberRepository } from '../../modules/workspaces/infrastructure/drizzle-member-repository.js';
 import { DrizzleWorkspaceRepository } from '../../modules/workspaces/infrastructure/drizzle-workspace-repository.js';
 import { DrizzleNotificationRepository } from '../../modules/notifications/infrastructure/drizzle-notification-repository.js';
+import { DrizzleSearchRepository } from '../../modules/search/infrastructure/drizzle-search-repository.js';
 import { DrizzlePreferenceRepository } from '../../modules/notifications/infrastructure/drizzle-preference-repository.js';
 import { DrizzleEventRepository } from '../outbox/drizzle-event-repository.js';
 import type { DbExecutor } from './executor.js';
@@ -40,6 +41,7 @@ export function createRepositories(db: DbExecutor) {
     preferences: new DrizzlePreferenceRepository(db),
     docs: new DrizzleDocRepository(db),
     meetings: new DrizzleMeetingRepository(db),
+    search: new DrizzleSearchRepository(db),
   };
 }
 

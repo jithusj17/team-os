@@ -50,6 +50,20 @@
       "when": 1792856262882,
       "tag": "0006_docs_meetings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792857022657,
+      "tag": "0007_search_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792857252778,
+      "tag": "0008_search_simple_words",
+      "breakpoints": true
     }
   ]
 }

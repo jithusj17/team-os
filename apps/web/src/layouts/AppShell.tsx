@@ -8,11 +8,12 @@ import {
   Monitor,
   Moon,
   Plus,
+  Search,
   Settings,
   Sun,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { canInWorkspace } from '@team-os/shared';
 import { Logo } from '../components/icons';
@@ -25,11 +26,12 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from '../components/ui/menu';
-import { Avatar } from '../components/ui/misc';
+import { Avatar, Kbd } from '../components/ui/misc';
 import { useCurrentUser, useSignOut } from '../features/auth/hooks';
 import { useInbox } from '../features/notifications/hooks';
 import { CreateProjectDialog } from '../features/projects/CreateProjectDialog';
 import { useProjects } from '../features/projects/hooks';
+import { CommandPalette } from '../features/search/CommandPalette';
 import { useWorkspace, useWorkspaceId, useWorkspaces } from '../features/workspaces/hooks';
 import { cn } from '../lib/cn';
 import { useRealtime } from '../lib/realtime';
@@ -159,7 +161,7 @@ function UserMenu() {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: () => void }) {
   const workspaceId = useWorkspaceId();
   const workspace = useWorkspace();
   const projects = useProjects();
@@ -174,6 +176,17 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       onClick={(e) => (e.target as HTMLElement).closest('a') && onNavigate?.()}
     >
       <WorkspaceSwitcher />
+      <button
+        onClick={() => {
+          onNavigate?.();
+          onSearch();
+        }}
+        className="mt-2 flex h-8 items-center gap-2.5 rounded-md border border-border bg-surface px-2 text-[13px] text-fg-subtle shadow-sm hover:text-fg-muted"
+      >
+        <Search className="size-4" />
+        <span className="flex-1 text-left">Search</span>
+        <Kbd>Ctrl K</Kbd>
+      </button>
       <nav className="mt-2 space-y-0.5">
         <NavItem
           to={`${base}/inbox`}
@@ -242,18 +255,31 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   // The mobile sidebar closes itself when a link in it is clicked (see Sidebar onNavigate).
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Ctrl+K / Cmd+K opens search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className="flex h-full">
       <aside className="hidden w-60 shrink-0 border-r border-border bg-sidebar md:block">
-        <Sidebar />
+        <Sidebar onSearch={() => setSearchOpen(true)} />
       </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
           <aside className="animate-slide-in absolute inset-y-0 left-0 w-64 border-r border-border bg-sidebar shadow-pop">
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
+            <Sidebar onNavigate={() => setMobileOpen(false)} onSearch={() => setSearchOpen(true)} />
           </aside>
         </div>
       )}
@@ -271,6 +297,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Logo className="size-5" />
         </div>
         <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+        <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </div>
     </div>
   );

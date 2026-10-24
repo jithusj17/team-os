@@ -18,7 +18,8 @@
     "format": "prettier --write .",
     "db:generate": "npm run db:generate -w @team-os/api",
     "db:migrate": "npm run db:migrate -w @team-os/api",
-    "seed": "npm run seed -w @team-os/api"
+    "seed": "npm run seed -w @team-os/api",
+    "reindex": "npm run reindex -w @team-os/api"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

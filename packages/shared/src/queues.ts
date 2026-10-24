@@ -5,6 +5,8 @@ import { workspaceRole } from './schemas.js';
 export const QUEUES = {
   /** Every committed workspace event, for background reactions (notifications, indexing). */
   domainEvents: 'domain-events',
+  /** Re-index a task, comment, doc or meeting for search (debounced by job id). */
+  searchIndex: 'search-index',
   /** Scheduled notification jobs: due-soon reminders and email digests. */
   notifications: 'notifications',
   email: 'email',
@@ -43,3 +45,13 @@ export const deadLetterJob = z.object({
   failedAt: z.iso.datetime(),
 });
 export type DeadLetterJob = z.infer<typeof deadLetterJob>;
+
+export const searchIndexJob = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('source'),
+    sourceType: z.enum(['task', 'comment', 'doc', 'meeting']),
+    sourceId: z.uuid(),
+  }),
+  z.object({ kind: z.literal('project-deleted'), projectId: z.uuid() }),
+]);
+export type SearchIndexJob = z.infer<typeof searchIndexJob>;

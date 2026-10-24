@@ -10,6 +10,7 @@ import { healthRoutes } from './http/health.routes.js';
 import { createDb, type Sql } from './infrastructure/db/client.js';
 import { createRedis, type RedisClient } from './infrastructure/redis.js';
 import type { OAuthProvider } from './modules/identity/domain/ports.js';
+import type { EmbeddingProvider } from './modules/search/domain/ports.js';
 import { authRoutes } from './modules/identity/http/auth.routes.js';
 import { attachRealtime } from './http/realtime.js';
 import { projectRoutes } from './modules/projects/http/projects.routes.js';
@@ -17,6 +18,7 @@ import { docRoutes } from './modules/docs/http/docs.routes.js';
 import { meetingRoutes } from './modules/meetings/http/meetings.routes.js';
 import { notificationRoutes } from './modules/notifications/http/notifications.routes.js';
 import { eventRoutes } from './modules/realtime/http/events.routes.js';
+import { searchRoutes } from './modules/search/http/search.routes.js';
 import { taskRoutes } from './modules/tasks/http/tasks.routes.js';
 import { workspaceRoutes } from './modules/workspaces/http/workspaces.routes.js';
 
@@ -33,6 +35,8 @@ declare module 'fastify' {
 export interface BuildAppOptions {
   /** Overrides the providers derived from config (used by tests). */
   oauthProviders?: OAuthProvider[];
+  /** Overrides the embeddings provider derived from config (used by tests). */
+  embeddings?: EmbeddingProvider;
 }
 
 function loggerOptions(config: Config): FastifyServerOptions['logger'] {
@@ -71,6 +75,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
     redis,
     log: app.log,
     oauthProviders: options.oauthProviders,
+    embeddings: options.embeddings,
   });
 
   app.decorate('config', config);
@@ -119,6 +124,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
       requireAuth(req);
     });
     await scoped.register(eventRoutes);
+    await scoped.register(searchRoutes);
   });
 
   await attachRealtime(app);
