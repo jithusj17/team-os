@@ -14,22 +14,25 @@ import { api, ApiError, errorMessage } from '../../lib/api';
 import { keys } from '../../lib/keys';
 
 /** Loads every task in a project (following pagination). Real-time events keep it current. */
+/** Fetches every task in a project, following pagination. */
+export async function fetchAllProjectTasks(projectId: string): Promise<Task[]> {
+  const all: Task[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: z.infer<typeof taskList> = await api(
+      `/projects/${projectId}/tasks?limit=100&sort=position${cursor ? `&cursor=${cursor}` : ''}`,
+      taskList,
+    );
+    all.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return all;
+}
+
 export function useProjectTasks(projectId: string) {
   return useQuery({
     queryKey: keys.tasks(projectId),
-    queryFn: async () => {
-      const all: Task[] = [];
-      let cursor: string | null = null;
-      do {
-        const page: z.infer<typeof taskList> = await api(
-          `/projects/${projectId}/tasks?limit=100&sort=position${cursor ? `&cursor=${cursor}` : ''}`,
-          taskList,
-        );
-        all.push(...page.items);
-        cursor = page.nextCursor;
-      } while (cursor);
-      return all;
-    },
+    queryFn: () => fetchAllProjectTasks(projectId),
   });
 }
 

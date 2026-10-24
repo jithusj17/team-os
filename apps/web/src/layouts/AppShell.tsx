@@ -1,5 +1,7 @@
 import {
   Bell,
+  CalendarDays,
+  FileText,
   ChevronsUpDown,
   LogOut,
   Menu as MenuIcon,
@@ -179,6 +181,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           badge={inbox.data?.unreadCount}
         >
           Inbox
+        </NavItem>
+        <NavItem to={`${base}/docs`} icon={<FileText className="size-4" />}>
+          Docs
+        </NavItem>
+        <NavItem to={`${base}/calendar`} icon={<CalendarDays className="size-4" />}>
+          Calendar
         </NavItem>
         {role && canInWorkspace(role, { action: 'member:list' }) && (
           <NavItem to={`${base}/members`} icon={<Users className="size-4" />}>

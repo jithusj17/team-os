@@ -22,6 +22,12 @@ export const workspaceEventTypes = [
   'label.changed',
   'workspace.updated',
   'workspace.members_changed',
+  'doc.created',
+  'doc.updated',
+  'doc.deleted',
+  'meeting.created',
+  'meeting.updated',
+  'meeting.deleted',
 ] as const;
 export const workspaceEventType = z.enum(workspaceEventTypes);
 export type WorkspaceEventType = z.infer<typeof workspaceEventType>;

@@ -124,3 +124,66 @@ const minimumProjectRole: Record<ProjectAction, ProjectRole> = {
 export function canInProject(role: ProjectRole, action: ProjectAction): boolean {
   return projectRank[role] >= projectRank[minimumProjectRole[action]];
 }
+
+// ---- Docs and meetings ----
+
+export type DocAction = 'read' | 'edit' | 'delete';
+
+/**
+ * Docs live in a workspace (visible to members, not guests) or in a project (following the
+ * project's roles). `projectRole` is the user's effective role in the doc's project, if any.
+ */
+export function canOnDoc(
+  ctx: {
+    workspaceRole: WorkspaceRole;
+    isProjectDoc: boolean;
+    projectRole: ProjectRole | null;
+    isCreator: boolean;
+  },
+  action: DocAction,
+): boolean {
+  if (ctx.isProjectDoc) {
+    if (!ctx.projectRole) return false;
+    if (action === 'read') return true;
+    if (action === 'edit') return ctx.projectRole !== 'viewer';
+    return ctx.projectRole === 'admin' || (ctx.projectRole === 'editor' && ctx.isCreator);
+  }
+  if (ctx.workspaceRole === 'guest') return false;
+  if (action === 'delete') return isAdminOrOwner(ctx.workspaceRole) || ctx.isCreator;
+  return true;
+}
+
+export type MeetingAction = 'read' | 'edit' | 'rsvp';
+
+/**
+ * Attendees can always see a meeting they're invited to. Otherwise workspace meetings are
+ * visible to members and project meetings to people who can see the project. Organizers,
+ * workspace admins and project admins can change them.
+ */
+export function canOnMeeting(
+  ctx: {
+    workspaceRole: WorkspaceRole;
+    isProjectMeeting: boolean;
+    projectRole: ProjectRole | null;
+    isOrganizer: boolean;
+    isAttendee: boolean;
+  },
+  action: MeetingAction,
+): boolean {
+  switch (action) {
+    case 'rsvp':
+      return ctx.isAttendee;
+    case 'read':
+      return (
+        ctx.isAttendee ||
+        ctx.isOrganizer ||
+        (ctx.isProjectMeeting ? ctx.projectRole !== null : ctx.workspaceRole !== 'guest')
+      );
+    case 'edit':
+      return (
+        ctx.isOrganizer ||
+        isAdminOrOwner(ctx.workspaceRole) ||
+        (ctx.isProjectMeeting && ctx.projectRole === 'admin')
+      );
+  }
+}

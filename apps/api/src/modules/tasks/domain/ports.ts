@@ -40,6 +40,8 @@ export interface TaskRepository {
   maxSortOrder(projectId: string, statusId: string): Promise<number | null>;
   /** Re-spaces a column's sort orders evenly when fractional positions run out of precision. */
   rebalance(projectId: string, statusId: string): Promise<void>;
+  /** Key and title for each task id that exists (for showing links from docs and meetings). */
+  findRefs(ids: string[]): Promise<{ id: string; key: string; title: string; projectId: string }[]>;
   /** IDs of the task's ancestors (parent, grandparent, ...). */
   ancestorIds(taskId: string): Promise<string[]>;
   /** Open, assigned tasks due between two dates (inclusive, YYYY-MM-DD). */

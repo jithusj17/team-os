@@ -3,6 +3,9 @@ import { Button } from './components/ui/button';
 import { EmptyState } from './components/ui/misc';
 import { LoginPage } from './features/auth/LoginPage';
 import { RequireAuth } from './features/auth/RequireAuth';
+import { CalendarPage } from './features/calendar/CalendarPage';
+import { DocPage } from './features/docs/DocPage';
+import { DocsPage } from './features/docs/DocsPage';
 import { InboxPage } from './features/notifications/InboxPage';
 import { ProjectPage } from './features/projects/ProjectPage';
 import { AcceptInvitePage } from './features/workspaces/AcceptInvitePage';
@@ -64,6 +67,9 @@ export const router = createBrowserRouter([
           { path: 'p/:projectId', element: <ProjectPage /> },
           { path: 'tasks/:taskKey', element: <TaskKeyRedirect /> },
           { path: 'inbox', element: <InboxPage /> },
+          { path: 'docs', element: <DocsPage /> },
+          { path: 'docs/:docId', element: <DocPage /> },
+          { path: 'calendar', element: <CalendarPage /> },
           { path: 'members', element: <MembersPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],

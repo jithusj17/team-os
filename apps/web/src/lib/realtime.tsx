@@ -88,6 +88,21 @@ function applyEvent(queryClient: QueryClient, e: WorkspaceEvent) {
     case 'workspace.members_changed':
       void invalidate(keys.members(e.workspaceId));
       break;
+    case 'doc.created':
+    case 'doc.updated':
+    case 'doc.deleted': {
+      const { id } = e.payload as { id: string };
+      void invalidate(keys.docs(e.workspaceId));
+      if (e.type === 'doc.deleted') queryClient.removeQueries({ queryKey: keys.doc(id) });
+      else void invalidate(keys.doc(id));
+      break;
+    }
+    case 'meeting.created':
+    case 'meeting.updated':
+    case 'meeting.deleted':
+      void invalidate(keys.meetings(e.workspaceId));
+      void invalidate(keys.meeting((e.payload as { id: string }).id));
+      break;
   }
 }
 

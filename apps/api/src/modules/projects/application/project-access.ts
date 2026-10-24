@@ -30,6 +30,14 @@ export class ProjectAccess {
     return role ? { project: ctx.project, role, workspaceRole: ctx.workspaceRole } : null;
   }
 
+  /** Keeps only items in projects the user can see (each project is checked once). */
+  async filterVisible<T extends { projectId: string }>(userId: string, items: T[]): Promise<T[]> {
+    const ids = [...new Set(items.map((i) => i.projectId))];
+    const grants = await Promise.all(ids.map((id) => this.grantFor(userId, id)));
+    const visible = new Set(ids.filter((_, i) => grants[i] !== null));
+    return items.filter((i) => visible.has(i.projectId));
+  }
+
   async authorize(
     actorId: string,
     projectId: string,

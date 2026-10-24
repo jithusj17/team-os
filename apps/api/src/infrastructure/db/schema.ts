@@ -21,6 +21,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   projectRoles,
+  rsvpResponses,
   projectVisibilities,
   statusCategories,
   workspaceRoles,
@@ -403,3 +404,114 @@ export const notificationPreferences = pgTable('notification_preferences', {
   emailDigest: boolean('email_digest').notNull().default(true),
   updatedAt: updatedAt(),
 });
+
+// ---- Docs ----
+
+export const docs = pgTable(
+  'docs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Null for workspace-wide docs. */
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    version: integer('version').notNull().default(1),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('docs_workspace_updated_idx').on(t.workspaceId, t.updatedAt),
+    index().on(t.projectId),
+  ],
+);
+
+/** Snapshots for version history: one per editing session (same author, close in time). */
+export const docVersions = pgTable(
+  'doc_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    docId: uuid('doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('doc_versions_doc_created_idx').on(t.docId, t.createdAt)],
+);
+
+export const docTaskLinks = pgTable(
+  'doc_task_links',
+  {
+    docId: uuid('doc_id')
+      .notNull()
+      .references(() => docs.id, { onDelete: 'cascade' }),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.docId, t.taskId] }), index().on(t.taskId)],
+);
+
+// ---- Meetings ----
+
+export const rsvpResponse = pgEnum('rsvp_response', rsvpResponses);
+
+export const meetings = pgTable(
+  'meetings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    location: text('location').notNull().default(''),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    organizerId: uuid('organizer_id').references(() => users.id, { onDelete: 'set null' }),
+    notesDocId: uuid('notes_doc_id').references(() => docs.id, { onDelete: 'set null' }),
+    version: integer('version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('meetings_workspace_starts_idx').on(t.workspaceId, t.startsAt),
+    check('meetings_ends_after_starts', sql`${t.endsAt} > ${t.startsAt}`),
+  ],
+);
+
+export const meetingAttendees = pgTable(
+  'meeting_attendees',
+  {
+    meetingId: uuid('meeting_id')
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    response: rsvpResponse('response').notNull().default('pending'),
+  },
+  (t) => [primaryKey({ columns: [t.meetingId, t.userId] }), index().on(t.userId)],
+);
+
+export const meetingTaskLinks = pgTable(
+  'meeting_task_links',
+  {
+    meetingId: uuid('meeting_id')
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.meetingId, t.taskId] }), index().on(t.taskId)],
+);

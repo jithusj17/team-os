@@ -13,6 +13,8 @@ import type { OAuthProvider } from './modules/identity/domain/ports.js';
 import { authRoutes } from './modules/identity/http/auth.routes.js';
 import { attachRealtime } from './http/realtime.js';
 import { projectRoutes } from './modules/projects/http/projects.routes.js';
+import { docRoutes } from './modules/docs/http/docs.routes.js';
+import { meetingRoutes } from './modules/meetings/http/meetings.routes.js';
 import { notificationRoutes } from './modules/notifications/http/notifications.routes.js';
 import { eventRoutes } from './modules/realtime/http/events.routes.js';
 import { taskRoutes } from './modules/tasks/http/tasks.routes.js';
@@ -110,6 +112,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
   await app.register(projectRoutes);
   await app.register(taskRoutes);
   await app.register(notificationRoutes);
+  await app.register(docRoutes);
+  await app.register(meetingRoutes);
   await app.register(async (scoped) => {
     scoped.addHook('onRequest', async (req) => {
       requireAuth(req);

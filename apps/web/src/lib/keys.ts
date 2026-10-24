@@ -19,4 +19,9 @@ export const keys = {
   watchers: (taskId: string) => ['watchers', taskId] as const,
   notifications: ['notifications'] as const,
   notificationPrefs: ['notification-prefs'] as const,
+  docs: (workspaceId: string) => ['docs', workspaceId] as const,
+  doc: (id: string) => ['doc', id] as const,
+  docVersions: (id: string) => ['doc-versions', id] as const,
+  meetings: (workspaceId: string) => ['meetings', workspaceId] as const,
+  meeting: (id: string) => ['meeting', id] as const,
 };

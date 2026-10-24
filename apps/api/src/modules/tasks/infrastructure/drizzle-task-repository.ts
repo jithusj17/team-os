@@ -261,6 +261,27 @@ export class DrizzleTaskRepository implements TaskRepository {
     `);
   }
 
+  async findRefs(ids: string[]) {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: tasks.id,
+        number: tasks.number,
+        title: tasks.title,
+        projectId: tasks.projectId,
+        projectKey: projects.key,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(inArray(tasks.id, ids));
+    return rows.map((r) => ({
+      id: r.id,
+      key: formatTaskKey(r.projectKey, r.number),
+      title: r.title,
+      projectId: r.projectId,
+    }));
+  }
+
   async findDueBetween(from: string, to: string) {
     const rows = await this.views().where(
       and(

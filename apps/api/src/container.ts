@@ -101,6 +101,27 @@ import {
 } from './modules/notifications/application/notification-use-cases.js';
 import { SocketIoNotificationPusher } from './modules/notifications/infrastructure/socket-io-notification-pusher.js';
 import { ListWatchers, SetWatching } from './modules/tasks/application/watcher-use-cases.js';
+import {
+  CreateDoc,
+  DeleteDoc,
+  DocAccess,
+  GetDoc,
+  GetDocVersion,
+  LinkDocTask,
+  ListDocVersions,
+  ListDocs,
+  UpdateDoc,
+} from './modules/docs/application/doc-use-cases.js';
+import {
+  CreateMeeting,
+  DeleteMeeting,
+  GetMeeting,
+  LinkMeetingTask,
+  ListMeetings,
+  OpenMeetingNotes,
+  RespondToMeeting,
+  UpdateMeeting,
+} from './modules/meetings/application/meeting-use-cases.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -137,6 +158,13 @@ export function createContainer(deps: {
   const projectDeps = { uow, projectAccess };
   const taskDeps = { uow, projectAccess, taskAccess, clock };
   const pusher = new SocketIoNotificationPusher(redis);
+  const docAccess = new DocAccess({
+    docs: uow.repos.docs,
+    members: uow.repos.members,
+    projectAccess,
+  });
+  const docDeps = { uow, docAccess, projectAccess, clock, workspaceAccess: access };
+  const meetingDeps = { uow, projectAccess, workspaceAccess: access };
   const deliveryDeps = { uow, projectAccess, pusher, clock };
   const realtimeAccess = new RealtimeAccess({
     workspaceAccess: access,
@@ -216,6 +244,26 @@ export function createContainer(deps: {
       markRead: new MarkNotificationsRead({ uow, clock }),
       getPreferences: new GetNotificationPreferences({ uow, clock }),
       updatePreferences: new UpdateNotificationPreferences({ uow, clock }),
+    },
+    docs: {
+      list: new ListDocs(docDeps),
+      create: new CreateDoc(docDeps),
+      get: new GetDoc(docDeps),
+      update: new UpdateDoc(docDeps),
+      delete: new DeleteDoc(docDeps),
+      versions: new ListDocVersions(docDeps),
+      version: new GetDocVersion(docDeps),
+      linkTask: new LinkDocTask(docDeps),
+    },
+    meetings: {
+      list: new ListMeetings(meetingDeps),
+      create: new CreateMeeting(meetingDeps),
+      get: new GetMeeting(meetingDeps),
+      update: new UpdateMeeting(meetingDeps),
+      delete: new DeleteMeeting(meetingDeps),
+      respond: new RespondToMeeting(meetingDeps),
+      linkTask: new LinkMeetingTask(meetingDeps),
+      openNotes: new OpenMeetingNotes(meetingDeps),
     },
     realtime: {
       access: realtimeAccess,

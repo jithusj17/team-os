@@ -219,6 +219,63 @@ await c.tasks.addComment.execute(
   `Repro'd on 18.1 too. <@${dan.id}> can you check overflow on the popover root?`,
 );
 
+const plan = await c.docs.create.execute(alice.id, ws.id, {
+  title: 'Billing launch plan',
+  projectId: null,
+  body: [
+    '## Goal',
+    'Launch self-serve billing to **all customers** by the end of the month.',
+    '',
+    '## Milestones',
+    '',
+    '| Milestone | Owner | Status |',
+    '| --- | --- | --- |',
+    '| Billing API | Bob | Done |',
+    '| Settings page | Alice | In progress |',
+    '| Rollout | Alice | Not started |',
+    '',
+    '## Checklist',
+    '',
+    '- [x] Pricing approved',
+    '- [x] API design reviewed',
+    '- [ ] Settings page shipped',
+    '- [ ] Support team trained',
+    '',
+    '> Risk: board performance (WEB-7) must be fixed before rollout.',
+  ].join('\n'),
+});
+await c.docs.linkTask.execute(alice.id, plan.id, tasks.billing!, true);
+await c.docs.linkTask.execute(alice.id, plan.id, tasks.launch!, true);
+
+// Meetings this week (server-local time), so the calendar isn't empty.
+const monday = new Date();
+monday.setHours(0, 0, 0, 0);
+monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+const slot = (dayOffset: number, hour: number, minutes: number) => {
+  const start = new Date(monday);
+  start.setDate(start.getDate() + dayOffset);
+  start.setHours(Math.floor(hour), (hour % 1) * 60);
+  return {
+    startsAt: start.toISOString(),
+    endsAt: new Date(start.getTime() + minutes * 60_000).toISOString(),
+  };
+};
+const meeting = (title: string, when: ReturnType<typeof slot>, attendees: { id: string }[]) =>
+  c.meetings.create.execute(alice.id, ws.id, {
+    title,
+    ...when,
+    description: '',
+    location: 'https://meet.example.com/acme',
+    attendeeIds: attendees.map((a) => a.id),
+    projectId: null,
+  });
+const planning = await meeting('Sprint planning', slot(0, 10, 60), [bob, carol, dan]);
+await meeting('Billing sync', slot(1, 14, 30), [bob]);
+await meeting('Design review', slot(2, 11, 60), [carol]);
+await meeting('1:1 Alice / Dan', slot(2, 11.5, 30), [dan]);
+await meeting('Launch go/no-go', slot(4, 15, 60), [bob, carol]);
+await c.meetings.linkTask.execute(alice.id, planning.id, tasks.perf!, true);
+
 console.log(
   'Seeded the "Acme" workspace. Sign in with dev login as alice@acme.test (or bob/carol/dan@acme.test).',
 );

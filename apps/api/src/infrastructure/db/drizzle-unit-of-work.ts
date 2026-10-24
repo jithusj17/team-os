@@ -1,5 +1,7 @@
 import type { UnitOfWork } from '../../shared/application/unit-of-work.js';
+import { DrizzleDocRepository } from '../../modules/docs/infrastructure/drizzle-doc-repository.js';
 import { DrizzleUserRepository } from '../../modules/identity/infrastructure/drizzle-user-repository.js';
+import { DrizzleMeetingRepository } from '../../modules/meetings/infrastructure/drizzle-meeting-repository.js';
 import { DrizzleProjectMemberRepository } from '../../modules/projects/infrastructure/drizzle-project-member-repository.js';
 import { DrizzleProjectRepository } from '../../modules/projects/infrastructure/drizzle-project-repository.js';
 import { DrizzleStatusRepository } from '../../modules/projects/infrastructure/drizzle-status-repository.js';
@@ -36,6 +38,8 @@ export function createRepositories(db: DbExecutor) {
     watchers: new DrizzleWatcherRepository(db),
     notifications: new DrizzleNotificationRepository(db),
     preferences: new DrizzlePreferenceRepository(db),
+    docs: new DrizzleDocRepository(db),
+    meetings: new DrizzleMeetingRepository(db),
   };
 }
 

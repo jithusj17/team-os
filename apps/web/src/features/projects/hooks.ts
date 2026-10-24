@@ -33,6 +33,7 @@ export function useProjectPeople(projectId: string) {
   return useQuery({
     queryKey: keys.projectMembers(projectId),
     queryFn: () => api(`/projects/${projectId}/people`, z.array(projectMember)),
+    enabled: !!projectId,
     staleTime: 60_000,
   });
 }
