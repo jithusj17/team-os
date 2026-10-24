@@ -11,6 +11,8 @@ import { createDb, type Sql } from './infrastructure/db/client.js';
 import { createRedis, type RedisClient } from './infrastructure/redis.js';
 import type { OAuthProvider } from './modules/identity/domain/ports.js';
 import { authRoutes } from './modules/identity/http/auth.routes.js';
+import { projectRoutes } from './modules/projects/http/projects.routes.js';
+import { taskRoutes } from './modules/tasks/http/tasks.routes.js';
 import { workspaceRoutes } from './modules/workspaces/http/workspaces.routes.js';
 
 declare module 'fastify' {
@@ -102,6 +104,8 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(workspaceRoutes);
+  await app.register(projectRoutes);
+  await app.register(taskRoutes);
 
   return app;
 }

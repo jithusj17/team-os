@@ -2,16 +2,27 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   customType,
+  date,
+  doublePrecision,
   index,
+  integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { workspaceRoles } from '@team-os/shared';
+import {
+  projectRoles,
+  projectVisibilities,
+  statusCategories,
+  workspaceRoles,
+} from '@team-os/shared';
 
 // Postgres extensions (vector, citext) are enabled by migration 0000.
 const citext = customType<{ data: string }>({ dataType: () => 'citext' });
@@ -97,4 +108,177 @@ export const workspaceInvites = pgTable(
       .where(sql`${t.acceptedAt} is null and ${t.revokedAt} is null`),
     check('workspace_invites_role_not_owner', sql`${t.role} <> 'owner'`),
   ],
+);
+
+// ---- Projects ----
+
+export const projectVisibility = pgEnum('project_visibility', projectVisibilities);
+export const projectRole = pgEnum('project_role', projectRoles);
+export const statusCategory = pgEnum('status_category', statusCategories);
+
+export const projects = pgTable(
+  'projects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    visibility: projectVisibility('visibility').notNull().default('workspace'),
+    /** Last task number issued; incremented under a row lock to number tasks ENG-1, ENG-2, ... */
+    taskCounter: integer('task_counter').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('projects_workspace_key_idx').on(t.workspaceId, t.key)],
+);
+
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: projectRole('role').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index().on(t.userId)],
+);
+
+export const projectStatuses = pgTable(
+  'project_statuses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: citext('name').notNull(),
+    category: statusCategory('category').notNull(),
+    color: text('color').notNull(),
+    position: integer('position').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('project_statuses_name_idx').on(t.projectId, t.name)],
+);
+
+// ---- Labels ----
+
+export const labels = pgTable(
+  'labels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: citext('name').notNull(),
+    color: text('color').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('labels_workspace_name_idx').on(t.workspaceId, t.name)],
+);
+
+// ---- Tasks ----
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    statusId: uuid('status_id')
+      .notNull()
+      .references(() => projectStatuses.id, { onDelete: 'restrict' }),
+    /** 0 = none ... 4 = urgent, so it sorts numerically. */
+    priority: smallint('priority').notNull().default(0),
+    assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
+    dueDate: date('due_date', { mode: 'string' }),
+    estimate: integer('estimate'),
+    parentId: uuid('parent_id').references((): AnyPgColumn => tasks.id, { onDelete: 'set null' }),
+    /** Board order within a status column (fractional indexing). */
+    sortOrder: doublePrecision('sort_order').notNull(),
+    version: integer('version').notNull().default(1),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('tasks_project_number_idx').on(t.projectId, t.number),
+    index('tasks_board_idx').on(t.projectId, t.statusId, t.sortOrder),
+    index().on(t.assigneeId),
+    index().on(t.parentId),
+    index('tasks_workspace_updated_idx').on(t.workspaceId, t.updatedAt),
+    check('tasks_not_own_parent', sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
+    check('tasks_priority_range', sql`${t.priority} between 0 and 4`),
+  ],
+);
+
+export const taskLabels = pgTable(
+  'task_labels',
+  {
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    labelId: uuid('label_id')
+      .notNull()
+      .references(() => labels.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.labelId] }), index().on(t.labelId)],
+);
+
+export const comments = pgTable(
+  'comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+  },
+  (t) => [index('comments_task_created_idx').on(t.taskId, t.createdAt)],
+);
+
+export const commentMentions = pgTable(
+  'comment_mentions',
+  {
+    commentId: uuid('comment_id')
+      .notNull()
+      .references(() => comments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.commentId, t.userId] }), index().on(t.userId)],
+);
+
+export const taskActivity = pgTable(
+  'task_activity',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    type: text('type').notNull(),
+    changes: jsonb('changes').$type<Record<string, { from: unknown; to: unknown }>>(),
+    commentId: uuid('comment_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('task_activity_task_created_idx').on(t.taskId, t.createdAt)],
 );

@@ -20,7 +20,8 @@ Each API module lives in `apps/api/src/modules/<name>/` with four layers. Depend
 
 - `src/container.ts` is the composition root: the only place that chooses implementations.
 - Transactions: use cases take `UnitOfWork<{ ...repos they need }>` and call `uow.transaction(repos => ...)`. Plain reads use `uow.repos`.
-- New repositories: add the interface in `domain/ports.ts`, the Drizzle class in `infrastructure/`, register it in `infrastructure/db/drizzle-unit-of-work.ts`, and add an in-memory version in `test/fakes/in-memory.ts`.
+- New repositories: add the interface in `domain/ports.ts`, the Drizzle class in `infrastructure/`, and register it in `infrastructure/db/drizzle-unit-of-work.ts`. Add an in-memory version in `test/fakes/in-memory.ts` when a use-case unit test needs it.
+- Authorization: workspace-scoped use cases call `WorkspaceAccess.authorize`; project- and task-scoped ones call `ProjectAccess.authorize` / `TaskAccess.authorize`. Rules live in `packages/shared/src/permissions.ts`.
 - Errors: throw `DomainError` helpers (`notFound`, `forbidden`, `conflict`, ...) from `shared/domain/errors.ts`; never HTTP status codes outside `http/`.
 - Tests: use-case logic is unit tested with in-memory repositories (`test/unit/`); HTTP + database behaviour is integration tested (`test/*.test.ts`).
 

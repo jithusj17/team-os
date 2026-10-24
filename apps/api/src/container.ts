@@ -38,6 +38,45 @@ import {
   ListMyWorkspaces,
   UpdateWorkspace,
 } from './modules/workspaces/application/workspace-use-cases.js';
+import { ProjectAccess } from './modules/projects/application/project-access.js';
+import {
+  CreateProject,
+  DeleteProject,
+  GetProject,
+  ListProjectMembers,
+  ListProjects,
+  RemoveProjectMember,
+  SetProjectMember,
+  UpdateProject,
+} from './modules/projects/application/project-use-cases.js';
+import {
+  CreateStatus,
+  DeleteStatus,
+  ReorderStatuses,
+  UpdateStatus,
+} from './modules/projects/application/status-use-cases.js';
+import {
+  AddComment,
+  DeleteComment,
+  EditComment,
+  ListComments,
+} from './modules/tasks/application/comment-use-cases.js';
+import {
+  CreateLabel,
+  DeleteLabel,
+  ListLabels,
+  UpdateLabel,
+} from './modules/tasks/application/label-use-cases.js';
+import {
+  CreateTask,
+  DeleteTask,
+  GetTask,
+  GetTaskByKey,
+  ListTaskActivity,
+  ListTasks,
+  TaskAccess,
+  UpdateTask,
+} from './modules/tasks/application/task-use-cases.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -66,6 +105,10 @@ export function createContainer(deps: {
   const providers = new OAuthProviderRegistry(deps.oauthProviders ?? providersFromConfig(config));
   const stateStore = new RedisOAuthStateStore(redis);
   const access = new WorkspaceAccess(uow.repos.members);
+  const projectAccess = new ProjectAccess(uow.repos.projects);
+  const taskAccess = new TaskAccess({ tasks: uow.repos.tasks, projectAccess });
+  const projectDeps = { uow, projectAccess };
+  const taskDeps = { uow, projectAccess, taskAccess, clock };
 
   return {
     uow,
@@ -95,6 +138,39 @@ export function createContainer(deps: {
       revokeInvite: new RevokeInvite({ uow, access, clock }),
       previewInvite: new PreviewInvite({ uow, tokens, clock }),
       acceptInvite: new AcceptInvite({ uow, tokens, clock }),
+    },
+    projects: {
+      list: new ListProjects({ ...projectDeps, workspaceAccess: access }),
+      create: new CreateProject({ ...projectDeps, workspaceAccess: access }),
+      get: new GetProject(projectDeps),
+      update: new UpdateProject(projectDeps),
+      delete: new DeleteProject(projectDeps),
+      listMembers: new ListProjectMembers(projectDeps),
+      setMember: new SetProjectMember(projectDeps),
+      removeMember: new RemoveProjectMember(projectDeps),
+      createStatus: new CreateStatus(projectDeps),
+      updateStatus: new UpdateStatus(projectDeps),
+      reorderStatuses: new ReorderStatuses(projectDeps),
+      deleteStatus: new DeleteStatus(projectDeps),
+    },
+    tasks: {
+      list: new ListTasks(taskDeps),
+      get: new GetTask(taskDeps),
+      getByKey: new GetTaskByKey(taskDeps),
+      create: new CreateTask(taskDeps),
+      update: new UpdateTask(taskDeps),
+      delete: new DeleteTask(taskDeps),
+      activity: new ListTaskActivity(taskDeps),
+      listComments: new ListComments(taskDeps),
+      addComment: new AddComment(taskDeps),
+      editComment: new EditComment(taskDeps),
+      deleteComment: new DeleteComment(taskDeps),
+    },
+    labels: {
+      list: new ListLabels({ uow, workspaceAccess: access }),
+      create: new CreateLabel({ uow, workspaceAccess: access }),
+      update: new UpdateLabel({ uow, workspaceAccess: access }),
+      delete: new DeleteLabel({ uow, workspaceAccess: access }),
     },
     async close() {
       await jobs.close();

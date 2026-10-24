@@ -27,7 +27,8 @@ export function buildTestApp(
 
 /** Clears all data between tests. Tests run one file at a time, so this is safe. */
 export async function resetState(app: TestApp) {
-  await app.sql`TRUNCATE users, oauth_accounts, workspaces, workspace_members, workspace_invites CASCADE`;
+  // Every other table references users or workspaces, so CASCADE clears them all.
+  await app.sql`TRUNCATE users, workspaces CASCADE`;
   await app.redis.flushdb();
 }
 
@@ -64,7 +65,7 @@ export async function signIn(app: TestApp, email: string, name?: string): Promis
   return { ...user, cookie: `sid=${sessionToken}`, csrf: csrfToken };
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** Sends a request as `user` (with session cookie and CSRF header), or anonymously. */
 export function request(
@@ -95,4 +96,33 @@ export async function setupWorkspace(app: TestApp) {
   }
   const outsider = await signIn(app, 'outsider@example.com', 'Outsider');
   return { workspace, ...users, outsider };
+}
+
+/** Shorthand for a JSON request that must succeed with `status`; returns the parsed body. */
+export async function ok<T = any>( // eslint-disable-line @typescript-eslint/no-explicit-any -- test convenience
+  app: TestApp,
+  user: TestUser | null,
+  method: Method,
+  url: string,
+  payload?: InjectOptions['payload'],
+  status = method === 'POST' ? 201 : 200,
+): Promise<T> {
+  const res = await request(app, user, method, url, payload);
+  if (res.statusCode !== status) {
+    throw new Error(`${method} ${url} -> ${res.statusCode} (expected ${status}): ${res.body}`);
+  }
+  return res.body ? (res.json() as T) : (undefined as T);
+}
+
+/** A workspace (see setupWorkspace) plus a workspace-visible project created by the owner. */
+export async function setupProject(app: TestApp) {
+  const ctx = await setupWorkspace(app);
+  const project = await app.container.projects.create.execute(ctx.owner.id, ctx.workspace.id, {
+    name: 'Engineering',
+    key: 'ENG',
+    description: '',
+    visibility: 'workspace',
+  });
+  const status = (name: string) => project.statuses.find((s) => s.name === name)!;
+  return { ...ctx, project, status };
 }

@@ -16,7 +16,10 @@ export type WorkspacePermissionCheck =
         | 'workspace:delete'
         | 'member:list'
         | 'invite:list'
-        | 'invite:revoke';
+        | 'invite:revoke'
+        | 'project:create'
+        | 'label:manage'
+        | 'label:delete';
     }
   | { action: 'invite:create'; role: WorkspaceRole }
   | { action: 'member:change-role'; targetRole: WorkspaceRole; newRole: WorkspaceRole }
@@ -35,7 +38,11 @@ export function canInWorkspace(actor: WorkspaceRole, check: WorkspacePermissionC
     case 'workspace:read':
       return true;
     case 'member:list':
+    case 'project:create':
+    case 'label:manage':
       return actor !== 'guest';
+    case 'label:delete':
+      return isAdminOrOwner(actor);
     case 'workspace:update':
     case 'invite:list':
     case 'invite:revoke':
@@ -57,4 +64,63 @@ export function canInWorkspace(actor: WorkspaceRole, check: WorkspacePermissionC
       if (actor === 'owner') return true;
       return actor === 'admin' && isMemberOrGuest(check.targetRole);
   }
+}
+
+// ---- Projects ----
+
+export const projectRoles = ['admin', 'editor', 'viewer'] as const;
+export type ProjectRole = (typeof projectRoles)[number];
+
+/** `workspace`: every workspace member can see it. `private`: only explicit project members. */
+export const projectVisibilities = ['workspace', 'private'] as const;
+export type ProjectVisibility = (typeof projectVisibilities)[number];
+
+/**
+ * A user's role in a project, combining their workspace role, the project's visibility and
+ * any explicit project membership. Returns null if they cannot see the project at all.
+ *
+ * - Workspace owners and admins administer every project.
+ * - Otherwise an explicit project role wins (so a member can be limited to viewer).
+ * - Members get editor on workspace-visible projects. Guests need explicit membership.
+ */
+export function effectiveProjectRole(
+  workspaceRole: WorkspaceRole,
+  visibility: ProjectVisibility,
+  explicitRole: ProjectRole | null,
+): ProjectRole | null {
+  if (workspaceRole === 'owner' || workspaceRole === 'admin') return 'admin';
+  if (explicitRole) return explicitRole;
+  if (workspaceRole === 'member' && visibility === 'workspace') return 'editor';
+  return null;
+}
+
+export type ProjectAction =
+  | 'project:read'
+  | 'project:update'
+  | 'project:delete'
+  | 'project:manage-members'
+  | 'status:manage'
+  | 'task:create'
+  | 'task:update'
+  | 'task:delete'
+  | 'comment:create'
+  | 'comment:moderate';
+
+const projectRank: Record<ProjectRole, number> = { viewer: 0, editor: 1, admin: 2 };
+
+const minimumProjectRole: Record<ProjectAction, ProjectRole> = {
+  'project:read': 'viewer',
+  'comment:create': 'viewer',
+  'task:create': 'editor',
+  'task:update': 'editor',
+  'task:delete': 'editor',
+  'project:update': 'admin',
+  'project:delete': 'admin',
+  'project:manage-members': 'admin',
+  'status:manage': 'admin',
+  'comment:moderate': 'admin',
+};
+
+export function canInProject(role: ProjectRole, action: ProjectAction): boolean {
+  return projectRank[role] >= projectRank[minimumProjectRole[action]];
 }
