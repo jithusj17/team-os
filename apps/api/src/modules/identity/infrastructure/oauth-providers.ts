@@ -1,22 +1,8 @@
 import { decodeIdToken, GitHub, Google } from 'arctic';
 import { z } from 'zod';
-import type { OAuthProviderName } from '@team-os/shared';
-import type { Config } from '../../config.js';
-
-export interface OAuthProfile {
-  providerUserId: string;
-  email: string;
-  /** Only verified emails may be used to link to an existing account. */
-  emailVerified: boolean;
-  name: string;
-  avatarUrl: string | null;
-}
-
-export interface OAuthProvider {
-  name: OAuthProviderName;
-  authorizationUrl(state: string, codeVerifier: string): URL;
-  exchange(code: string, codeVerifier: string): Promise<OAuthProfile>;
-}
+import type { Config } from '../../../config.js';
+import type { OAuthProvider } from '../domain/ports.js';
+import type { OAuthProfile, OAuthProviderName } from '../domain/user.js';
 
 const googleClaims = z.object({
   sub: z.string(),

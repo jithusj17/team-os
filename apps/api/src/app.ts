@@ -3,23 +3,23 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Config } from './config.js';
-import { createDb, type Db, type Sql } from './db/client.js';
-import { registerErrorHandlers } from './lib/errors.js';
-import { Queues } from './lib/queues.js';
-import { createRedis, type RedisClient } from './lib/redis.js';
-import { authPlugin } from './modules/auth/plugin.js';
-import { providersFromConfig, type OAuthProvider } from './modules/auth/providers.js';
-import { authRoutes } from './modules/auth/routes.js';
-import { workspaceRoutes } from './modules/workspaces/routes.js';
-import { healthRoutes } from './routes/health.js';
+import { createContainer, type Container } from './container.js';
+import { authPlugin } from './http/auth.plugin.js';
+import { registerErrorHandlers } from './http/error-handler.js';
+import { healthRoutes } from './http/health.routes.js';
+import { createDb, type Sql } from './infrastructure/db/client.js';
+import { createRedis, type RedisClient } from './infrastructure/redis.js';
+import type { OAuthProvider } from './modules/identity/domain/ports.js';
+import { authRoutes } from './modules/identity/http/auth.routes.js';
+import { workspaceRoutes } from './modules/workspaces/http/workspaces.routes.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: Config;
-    db: Db;
+    container: Container;
+    /** Raw connections, used only by health checks and tests. */
     sql: Sql;
     redis: RedisClient;
-    queues: Queues;
   }
 }
 
@@ -58,20 +58,25 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
   const { db, sql } = createDb(config.DATABASE_URL);
   const redis = createRedis(config.REDIS_URL);
   await redis.connect().catch((err: unknown) => app.log.error({ err }, 'Redis connection failed'));
-  const queues = new Queues(config.REDIS_URL, app.log);
+  const container = createContainer({
+    config,
+    db,
+    redis,
+    log: app.log,
+    oauthProviders: options.oauthProviders,
+  });
 
   app.decorate('config', config);
-  app.decorate('db', db);
+  app.decorate('container', container);
   app.decorate('sql', sql);
   app.decorate('redis', redis);
-  app.decorate('queues', queues);
 
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
   });
 
   app.addHook('onClose', async () => {
-    await queues.close();
+    await container.close();
     await Promise.allSettled([sql.end({ timeout: 5 }), redis.quit()]);
   });
 
@@ -95,9 +100,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
   });
 
   await app.register(healthRoutes);
-  await app.register(authRoutes, {
-    providers: options.oauthProviders ?? providersFromConfig(config),
-  });
+  await app.register(authRoutes);
   await app.register(workspaceRoutes);
 
   return app;

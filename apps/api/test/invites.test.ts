@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { emailJob, QUEUES } from '@team-os/shared';
-import { workspaceInvites } from '../src/db/schema.js';
+
 import {
   buildTestApp,
   request,
@@ -37,7 +37,7 @@ describe('invites', () => {
     expect(created.invite).toMatchObject({ email: 'new.person@example.com', role: 'member' });
     expect(created.acceptUrl).toMatch(/^http:\/\/localhost:5173\/invites\/.+/);
 
-    const jobs = await app.queues.queue(QUEUES.email).getJobs(['waiting', 'delayed']);
+    const jobs = await app.container.jobs.queue(QUEUES.email).getJobs(['waiting', 'delayed']);
     expect(jobs).toHaveLength(1);
     expect(emailJob.parse(jobs[0]!.data)).toMatchObject({
       type: 'workspace-invite',
@@ -123,7 +123,7 @@ describe('invites', () => {
     expect(r1.json().error.code).toBe('invite_revoked');
 
     const expired = await invite('outsider@example.com');
-    await app.db.update(workspaceInvites).set({ expiresAt: new Date(Date.now() - 1000) });
+    await app.sql`update workspace_invites set expires_at = now() - interval '1 second'`;
     const r2 = await request(app, ctx.outsider, 'POST', `/invites/${expired.token}/accept`);
     expect(r2.statusCode).toBe(410);
     expect(r2.json().error.code).toBe('invite_expired');

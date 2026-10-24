@@ -5,7 +5,7 @@ import { createDb } from './client.js';
 
 const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../drizzle',
+  '../../../drizzle',
 );
 
 export async function runMigrations(url: string) {

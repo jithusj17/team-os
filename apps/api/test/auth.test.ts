@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { meResponse } from '@team-os/shared';
-import { safeReturnTo } from '../src/modules/auth/routes.js';
+import { safeReturnTo } from '../src/modules/identity/domain/user.js';
 import {
   buildTestApp,
   FakeOAuthProvider,

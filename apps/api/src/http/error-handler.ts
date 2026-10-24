@@ -1,29 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import type { ErrorResponse } from '@team-os/shared';
+import { DomainError, type ErrorKind } from '../shared/domain/errors.js';
 
-/** An error that is safe to show to the client, with a stable machine-readable code. */
-export class AppError extends Error {
-  constructor(
-    readonly statusCode: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
+const statusByKind: Record<ErrorKind, number> = {
+  validation: 400,
+  unauthorized: 401,
+  forbidden: 403,
+  not_found: 404,
+  conflict: 409,
+  gone: 410,
+  unavailable: 503,
+};
 
-export const badRequest = (code: string, message: string) => new AppError(400, code, message);
-export const unauthorized = (message = 'Sign in required') =>
-  new AppError(401, 'unauthorized', message);
-export const forbidden = (code = 'forbidden', message = 'You do not have permission to do this') =>
-  new AppError(403, code, message);
-export const notFound = (code = 'not_found', message = 'Not found') =>
-  new AppError(404, code, message);
-export const conflict = (code: string, message: string) => new AppError(409, code, message);
-export const gone = (code: string, message: string) => new AppError(410, code, message);
-
+/** Maps domain errors and framework errors to the API's error response format. */
 export function registerErrorHandlers(app: FastifyInstance) {
   app.setErrorHandler((err, req, reply) => {
     const send = (status: number, error: ErrorResponse['error']) =>
@@ -36,8 +26,8 @@ export function registerErrorHandlers(app: FastifyInstance) {
         details: err.validation.map((v) => ({ path: v.instancePath, message: v.message })),
       });
     }
-    if (err instanceof AppError) {
-      return send(err.statusCode, { code: err.code, message: err.message });
+    if (err instanceof DomainError) {
+      return send(statusByKind[err.kind], { code: err.code, message: err.message });
     }
 
     // Errors from Fastify and its plugins (bad JSON, payload too large, rate limits, ...).

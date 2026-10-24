@@ -2,10 +2,9 @@ import type { InjectOptions } from 'fastify';
 import type { OAuthProviderName, WorkspaceRole } from '@team-os/shared';
 import { buildApp, type BuildAppOptions } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { workspaceMembers } from '../src/db/schema.js';
-import type { OAuthProfile, OAuthProvider } from '../src/modules/auth/providers.js';
-import { upsertUserByEmail } from '../src/modules/auth/service.js';
-import { createWorkspace } from '../src/modules/workspaces/service.js';
+
+import type { OAuthProvider } from '../src/modules/identity/domain/ports.js';
+import type { OAuthProfile } from '../src/modules/identity/domain/user.js';
 
 export type TestApp = Awaited<ReturnType<typeof buildApp>>;
 
@@ -58,9 +57,11 @@ export interface TestUser {
 
 /** Creates (or reuses) a user and a live session for them. */
 export async function signIn(app: TestApp, email: string, name?: string): Promise<TestUser> {
-  const user = await upsertUserByEmail(app.db, email, name);
-  const { token, session } = await app.sessions.create(user.id);
-  return { ...user, cookie: `sid=${token}`, csrf: session.csrfToken };
+  const { user, sessionToken, csrfToken } = await app.container.identity.devSignIn.execute({
+    email,
+    name,
+  });
+  return { ...user, cookie: `sid=${sessionToken}`, csrf: csrfToken };
 }
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -84,13 +85,12 @@ export function request(
 /** A workspace with one user per role, plus a signed-in user who is not a member. */
 export async function setupWorkspace(app: TestApp) {
   const owner = await signIn(app, 'owner@example.com', 'Olivia Owner');
-  const workspace = await createWorkspace(app.db, owner.id, { name: 'Acme' });
+  const { container } = app;
+  const workspace = await container.workspaces.create.execute(owner.id, { name: 'Acme' });
   const users = { owner } as Record<WorkspaceRole, TestUser>;
   for (const role of ['admin', 'member', 'guest'] as const) {
     const user = await signIn(app, `${role}@example.com`, `${role} user`);
-    await app.db
-      .insert(workspaceMembers)
-      .values({ workspaceId: workspace.id, userId: user.id, role });
+    await container.uow.repos.members.add(workspace.id, user.id, role);
     users[role] = user;
   }
   const outsider = await signIn(app, 'outsider@example.com', 'Outsider');

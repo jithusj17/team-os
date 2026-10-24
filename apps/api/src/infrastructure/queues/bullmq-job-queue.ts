@@ -1,7 +1,8 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
-import type { FastifyBaseLogger } from 'fastify';
+import type { Logger } from 'pino';
 import { QUEUES, type EmailJob, type QueueName } from '@team-os/shared';
+import type { JobQueue } from '../../shared/application/ports.js';
 
 const defaultJobOptions: JobsOptions = {
   attempts: 5,
@@ -10,14 +11,14 @@ const defaultJobOptions: JobsOptions = {
   removeOnFail: 5_000,
 };
 
-/** Producer side of the job queues. Queues are created lazily on first use. */
-export class Queues {
+/** BullMQ implementation of the job queue port. Queues are created lazily on first use. */
+export class BullMqJobQueue implements JobQueue {
   private readonly queues = new Map<QueueName, Queue>();
   private connection: Redis | null = null;
 
   constructor(
     private readonly redisUrl: string,
-    private readonly log: FastifyBaseLogger,
+    private readonly log: Pick<Logger, 'error'>,
   ) {}
 
   private get(name: QueueName): Queue {
