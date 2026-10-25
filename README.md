@@ -11,6 +11,7 @@
 [![Redis](https://img.shields.io/badge/Redis-7-FF4438?logo=redis&logoColor=white)](#tech-stack)
 [![Claude](https://img.shields.io/badge/AI-Claude-D97757?logo=anthropic&logoColor=white)](#ai-assistant)
 [![Tests](https://img.shields.io/badge/tests-250%2B%20passing-2EA44F)](#testing)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [Features](#features) · [AI assistant](#ai-assistant) · [Under the hood](#under-the-hood) · [Architecture](#architecture) · [Getting started](#getting-started) · [Roadmap](#roadmap)
 
@@ -249,6 +250,12 @@ More than **250 tests**, run with `npm test`:
 - [x] Hybrid search with permission-aware indexing
 - [x] AI: streamed summaries, cited Q&A, confirmed actions, notes → tasks
 - [ ] Hardening & deploy: load testing, security review, metrics, Docker images, CI/CD
+
+<br />
+
+## License
+
+Released under the [MIT License](LICENSE). You're free to use, modify and distribute this code, including commercially, as long as the copyright notice is kept.
 
 <br />
 
