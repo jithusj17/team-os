@@ -11,6 +11,8 @@ import { createDb, type Sql } from './infrastructure/db/client.js';
 import { createRedis, type RedisClient } from './infrastructure/redis.js';
 import type { OAuthProvider } from './modules/identity/domain/ports.js';
 import type { EmbeddingProvider } from './modules/search/domain/ports.js';
+import type { LanguageModel } from './modules/ai/domain/ports.js';
+import { aiRoutes } from './modules/ai/http/ai.routes.js';
 import { authRoutes } from './modules/identity/http/auth.routes.js';
 import { attachRealtime } from './http/realtime.js';
 import { projectRoutes } from './modules/projects/http/projects.routes.js';
@@ -37,6 +39,8 @@ export interface BuildAppOptions {
   oauthProviders?: OAuthProvider[];
   /** Overrides the embeddings provider derived from config (used by tests). */
   embeddings?: EmbeddingProvider;
+  /** Overrides the AI model derived from config (used by tests). */
+  model?: LanguageModel;
 }
 
 function loggerOptions(config: Config): FastifyServerOptions['logger'] {
@@ -76,6 +80,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
     log: app.log,
     oauthProviders: options.oauthProviders,
     embeddings: options.embeddings,
+    model: options.model,
   });
 
   app.decorate('config', config);
@@ -125,6 +130,7 @@ export async function buildApp(config: Config, options: BuildAppOptions = {}) {
     });
     await scoped.register(eventRoutes);
     await scoped.register(searchRoutes);
+    await scoped.register(aiRoutes);
   });
 
   await attachRealtime(app);

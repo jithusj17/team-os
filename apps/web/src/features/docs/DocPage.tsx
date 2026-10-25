@@ -6,6 +6,7 @@ import {
   MoreHorizontal,
   PenLine,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +26,9 @@ import { ApiError, errorMessage } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { keys } from '../../lib/keys';
 import { timeAgo } from '../../lib/format';
+import { ActionsDialog } from '../ai/ActionsDialog';
+import { SummarizeButton, SummaryCard } from '../ai/components';
+import { useAiEnabled, useSummary } from '../ai/hooks';
 import { useProjects } from '../projects/hooks';
 import { useMemberMap, useWorkspaceId } from '../workspaces/hooks';
 import {
@@ -236,6 +240,9 @@ function Editor({ doc }: { doc: Doc }) {
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [aiActionsOpen, setAiActionsOpen] = useState(false);
+  const aiEnabled = useAiEnabled();
+  const summary = useSummary('doc', doc.id);
   const allTasks = useAllVisibleTasks(linking);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const project = doc.projectId ? projects.data?.find((p) => p.id === doc.projectId) : null;
@@ -297,6 +304,14 @@ function Editor({ doc }: { doc: Doc }) {
               </button>
             ))}
           </div>
+        )}
+        {aiEnabled && (
+          <>
+            <SummarizeButton busy={summary.status === 'streaming'} onClick={summary.run} />
+            <Button size="sm" variant="ghost" onClick={() => setAiActionsOpen(true)}>
+              <Wand2 className="size-3.5 text-accent" /> Create tasks
+            </Button>
+          </>
         )}
         <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)}>
           <History className="size-3.5" /> History
@@ -394,6 +409,8 @@ function Editor({ doc }: { doc: Doc }) {
             )}
           </div>
 
+          <SummaryCard stream={summary} onClose={summary.reset} className="mt-6" />
+
           <div className="mt-8">
             {mode === 'write' && doc.canEdit ? (
               <textarea
@@ -416,6 +433,17 @@ function Editor({ doc }: { doc: Doc }) {
         </article>
       </div>
 
+      {aiEnabled && (
+        <ActionsDialog
+          open={aiActionsOpen}
+          onOpenChange={setAiActionsOpen}
+          workspaceId={workspaceId}
+          projectId={doc.projectId}
+          source={{ type: 'doc', id: doc.id }}
+          defaultInstruction="Create tasks for the action items in this doc"
+          title="Create tasks from this doc"
+        />
+      )}
       <HistoryDialog
         doc={doc}
         open={historyOpen}

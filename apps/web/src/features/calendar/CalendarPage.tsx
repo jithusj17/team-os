@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +21,9 @@ import { Avatar } from '../../components/ui/misc';
 import { Picker } from '../../components/ui/picker';
 import { PageSpinner } from '../../components/ui/spinner';
 import { cn } from '../../lib/cn';
+import { ActionsDialog } from '../ai/ActionsDialog';
+import { SummarizeButton, SummaryCard } from '../ai/components';
+import { useAiEnabled, useSummary } from '../ai/hooks';
 import { useCurrentUser } from '../auth/hooks';
 import { useAllVisibleTasks } from '../docs/hooks';
 import { useMemberMap, useWorkspace, useWorkspaceId } from '../workspaces/hooks';
@@ -62,6 +66,9 @@ function MeetingPanel({ meetingId, onClose }: { meetingId: string; onClose: () =
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
   const tasks = useAllVisibleTasks(linking);
+  const aiEnabled = useAiEnabled();
+  const summary = useSummary('meeting', meetingId);
+  const [extracting, setExtracting] = useState(false);
 
   if (!m) {
     return (
@@ -201,10 +208,23 @@ function MeetingPanel({ meetingId, onClose }: { meetingId: string; onClose: () =
           <div className="mb-2 text-[12px] font-semibold tracking-wide text-fg-subtle uppercase">
             Notes
           </div>
-          <Button onClick={openNotes} loading={notes.isPending}>
-            <FileText className="size-3.5" />{' '}
-            {m.notesDocId ? 'Open meeting notes' : 'Start meeting notes'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button onClick={openNotes} loading={notes.isPending}>
+              <FileText className="size-3.5" />{' '}
+              {m.notesDocId ? 'Open meeting notes' : 'Start meeting notes'}
+            </Button>
+            {aiEnabled && (
+              <>
+                <SummarizeButton busy={summary.status === 'streaming'} onClick={summary.run} />
+                {m.notesDocId && (
+                  <Button size="sm" variant="ghost" onClick={() => setExtracting(true)}>
+                    <Wand2 className="size-3.5 text-accent" /> Action items → tasks
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+          <SummaryCard stream={summary} onClose={summary.reset} className="mt-3" />
         </div>
 
         <div>
@@ -260,6 +280,17 @@ function MeetingPanel({ meetingId, onClose }: { meetingId: string; onClose: () =
         </div>
       </div>
       {editing && <MeetingDialog open onOpenChange={setEditing} existing={m} />}
+      {aiEnabled && (
+        <ActionsDialog
+          open={extracting}
+          onOpenChange={setExtracting}
+          workspaceId={workspaceId}
+          projectId={m.projectId}
+          source={{ type: 'meeting', id: m.id }}
+          defaultInstruction="Create a task for each action item in the meeting notes, with owners and due dates where stated"
+          title="Turn action items into tasks"
+        />
+      )}
     </aside>
   );
 }

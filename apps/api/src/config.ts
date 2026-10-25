@@ -34,6 +34,12 @@ const envSchema = z
     VOYAGE_API_KEY: z.string().min(1).optional(),
     EMBEDDINGS_MODEL: z.string().min(1).default('voyage-3.5'),
 
+    /** Claude API key. Without it, AI features report that they're not configured. */
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    AI_MODEL: z.string().min(1).default('claude-opus-5-5'),
+    /** Per-user requests per minute for AI endpoints (they're slow and cost money). */
+    AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   })

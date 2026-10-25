@@ -55,6 +55,32 @@ export function toPrefixTsQuery(text: string): string | null {
   return words.length ? words.map((w) => `${w}:*`).join(' & ') : null;
 }
 
+const QUESTION_STOPWORDS = new Set(
+  (
+    'a an and are as at be by can do does did for from has have how i in is it its me my of on ' +
+    'or our should so than that the their them there these they this to was we were what when ' +
+    'where which who why will with you your about any anything tell know'
+  ).split(' '),
+);
+
+/**
+ * Matches content containing any of a question's meaningful words, for retrieval ("what's
+ * the status of billing?" should find billing tasks that never say "status"). Ranking puts
+ * content matching more of the words first.
+ */
+export function toAnyWordQuery(text: string): { prefix: string; text: string } | null {
+  const words = [
+    ...new Set(
+      (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter(
+        (w) => w.length > 1 && !QUESTION_STOPWORDS.has(w),
+      ),
+    ),
+  ].slice(0, 12);
+  return words.length
+    ? { prefix: words.map((w) => `${w}:*`).join(' | '), text: words.join(' or ') }
+    : null;
+}
+
 export interface RankedHit {
   key: string;
 }

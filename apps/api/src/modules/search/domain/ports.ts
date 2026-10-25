@@ -17,6 +17,8 @@ export interface SearchHit {
   taskId: string | null;
   title: string;
   snippet: string;
+  /** The matching chunk's text (used as context for AI answers). */
+  content: string;
 }
 
 export interface SearchIndexRepository {

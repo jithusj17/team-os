@@ -64,6 +64,13 @@
       "when": 1792857252778,
       "tag": "0008_search_simple_words",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792857776838,
+      "tag": "0009_ai_proposals",
+      "breakpoints": true
     }
   ]
 }

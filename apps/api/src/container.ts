@@ -129,6 +129,19 @@ import {
 } from './modules/search/application/search-use-cases.js';
 import type { EmbeddingProvider } from './modules/search/domain/ports.js';
 import { embeddingsFromConfig } from './modules/search/infrastructure/embedding-providers.js';
+import {
+  ExecuteProposal,
+  GetProposal,
+  ProposeActions,
+} from './modules/ai/application/action-use-cases.js';
+import {
+  AskWorkspace,
+  GetAiStatus,
+  Summarize,
+} from './modules/ai/application/summary-use-cases.js';
+import type { LanguageModel } from './modules/ai/domain/ports.js';
+import { languageModelFromConfig } from './modules/ai/infrastructure/anthropic-language-model.js';
+import { RedisSummaryCache } from './modules/ai/infrastructure/redis-summary-cache.js';
 import type { AppUrls } from './shared/application/ports.js';
 import { CryptoTokenService, systemClock } from './shared/infrastructure/crypto-token-service.js';
 
@@ -144,9 +157,12 @@ export function createContainer(deps: {
   oauthProviders?: OAuthProvider[];
   /** Overrides the provider chosen from config (tests use a deterministic fake). */
   embeddings?: EmbeddingProvider;
+  /** Overrides the model chosen from config (tests use a scripted fake). */
+  model?: LanguageModel;
 }) {
   const { config, db, redis, log } = deps;
   const embeddings = deps.embeddings ?? embeddingsFromConfig(config);
+  const model = deps.model ?? languageModelFromConfig(config);
 
   const uow = new DrizzleUnitOfWork(db);
   const tokens = new CryptoTokenService();
@@ -182,6 +198,36 @@ export function createContainer(deps: {
     taskAccess,
     uow,
   });
+
+  const tasks = {
+    list: new ListTasks(taskDeps),
+    get: new GetTask(taskDeps),
+    getByKey: new GetTaskByKey(taskDeps),
+    create: new CreateTask(taskDeps),
+    update: new UpdateTask(taskDeps),
+    delete: new DeleteTask(taskDeps),
+    activity: new ListTaskActivity(taskDeps),
+    listComments: new ListComments(taskDeps),
+    addComment: new AddComment(taskDeps),
+    editComment: new EditComment(taskDeps),
+    deleteComment: new DeleteComment(taskDeps),
+    listDependencies: new ListDependencies(taskDeps),
+    addDependency: new AddDependency(taskDeps),
+    removeDependency: new RemoveDependency(taskDeps),
+    dependencyGraph: new GetDependencyGraph(taskDeps),
+    listWatchers: new ListWatchers(taskDeps),
+    setWatching: new SetWatching(taskDeps),
+  };
+  const getDoc = new GetDoc(docDeps);
+  const getMeeting = new GetMeeting(meetingDeps);
+  const search = new SearchWorkspace({ uow, workspaceAccess: access, embeddings, log });
+  const readers = {
+    getTask: tasks.get,
+    getTaskByKey: tasks.getByKey,
+    listComments: tasks.listComments,
+    getMeeting,
+    getDoc,
+  };
 
   return {
     uow,
@@ -227,25 +273,7 @@ export function createContainer(deps: {
       reorderStatuses: new ReorderStatuses(projectDeps),
       deleteStatus: new DeleteStatus(projectDeps),
     },
-    tasks: {
-      list: new ListTasks(taskDeps),
-      get: new GetTask(taskDeps),
-      getByKey: new GetTaskByKey(taskDeps),
-      create: new CreateTask(taskDeps),
-      update: new UpdateTask(taskDeps),
-      delete: new DeleteTask(taskDeps),
-      activity: new ListTaskActivity(taskDeps),
-      listComments: new ListComments(taskDeps),
-      addComment: new AddComment(taskDeps),
-      editComment: new EditComment(taskDeps),
-      deleteComment: new DeleteComment(taskDeps),
-      listDependencies: new ListDependencies(taskDeps),
-      addDependency: new AddDependency(taskDeps),
-      removeDependency: new RemoveDependency(taskDeps),
-      dependencyGraph: new GetDependencyGraph(taskDeps),
-      listWatchers: new ListWatchers(taskDeps),
-      setWatching: new SetWatching(taskDeps),
-    },
+    tasks,
     notifications: {
       fanOut: new FanOutEvent(deliveryDeps),
       sendDueSoonReminders: new SendDueSoonReminders(deliveryDeps),
@@ -258,7 +286,7 @@ export function createContainer(deps: {
     docs: {
       list: new ListDocs(docDeps),
       create: new CreateDoc(docDeps),
-      get: new GetDoc(docDeps),
+      get: getDoc,
       update: new UpdateDoc(docDeps),
       delete: new DeleteDoc(docDeps),
       versions: new ListDocVersions(docDeps),
@@ -268,7 +296,7 @@ export function createContainer(deps: {
     meetings: {
       list: new ListMeetings(meetingDeps),
       create: new CreateMeeting(meetingDeps),
-      get: new GetMeeting(meetingDeps),
+      get: getMeeting,
       update: new UpdateMeeting(meetingDeps),
       delete: new DeleteMeeting(meetingDeps),
       respond: new RespondToMeeting(meetingDeps),
@@ -279,7 +307,38 @@ export function createContainer(deps: {
       embeddings,
       scheduleIndexing: new ScheduleIndexing({ jobs }),
       indexSource: new IndexSource({ uow, embeddings, tokens }),
-      search: new SearchWorkspace({ uow, workspaceAccess: access, embeddings, log }),
+      search,
+    },
+    ai: {
+      status: new GetAiStatus({ model }),
+      summarize: new Summarize({
+        uow,
+        model,
+        cache: new RedisSummaryCache(redis),
+        tokens,
+        clock,
+        projectAccess,
+        ...readers,
+      }),
+      ask: new AskWorkspace({ model, search }),
+      propose: new ProposeActions({
+        uow,
+        model,
+        clock,
+        workspaceAccess: access,
+        projectAccess,
+        ...readers,
+      }),
+      getProposal: new GetProposal({ uow }),
+      execute: new ExecuteProposal({
+        uow,
+        clock,
+        createTask: tasks.create,
+        updateTask: tasks.update,
+        getTask: tasks.get,
+        addComment: tasks.addComment,
+        log,
+      }),
     },
     realtime: {
       access: realtimeAccess,

@@ -7,6 +7,7 @@ import {
   Search,
   Settings2,
   SlidersHorizontal,
+  Wand2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -21,11 +22,14 @@ import { cn } from '../../lib/cn';
 import { useProjectSubscription } from '../../lib/realtime';
 import { useCurrentUser } from '../auth/hooks';
 import { BoardView } from '../tasks/BoardView';
+import { ActionsDialog } from '../ai/ActionsDialog';
+import { SummarizeButton, SummaryCard } from '../ai/components';
+import { useAiEnabled, useSummary } from '../ai/hooks';
 import { CreateTaskDialog } from '../tasks/CreateTaskDialog';
 import { useProjectTasks } from '../tasks/hooks';
 import { ListView } from '../tasks/ListView';
 import { TaskPanel } from '../tasks/TaskPanel';
-import { useLabels } from '../workspaces/hooks';
+import { useLabels, useWorkspaceId } from '../workspaces/hooks';
 import { useProject, useProjectPeople } from './hooks';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 
@@ -66,6 +70,10 @@ export function ProjectPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aiActionsOpen, setAiActionsOpen] = useState(false);
+  const workspaceId = useWorkspaceId();
+  const aiEnabled = useAiEnabled();
+  const statusUpdate = useSummary('project', projectId);
 
   const setParam = useCallback(
     (key: string, value: string | null) =>
@@ -237,6 +245,20 @@ export function ProjectPage() {
           </Button>
         )}
 
+        {aiEnabled && (
+          <>
+            <SummarizeButton
+              label="Status update"
+              busy={statusUpdate.status === 'streaming'}
+              onClick={statusUpdate.run}
+            />
+            {(canCreate || canInProject(p.role, 'task:update')) && (
+              <Button size="sm" variant="ghost" onClick={() => setAiActionsOpen(true)}>
+                <Wand2 className="size-3.5 text-accent" /> AI actions
+              </Button>
+            )}
+          </>
+        )}
         {p.role === 'admin' && (
           <Tooltip content="Project settings">
             <Button
@@ -263,6 +285,17 @@ export function ProjectPage() {
           </Tooltip>
         )}
       </header>
+
+      {statusUpdate.status !== 'idle' && (
+        <div className="max-h-[40vh] shrink-0 overflow-y-auto border-b border-border px-5 py-3">
+          <SummaryCard
+            title="AI status update"
+            stream={statusUpdate}
+            onClose={statusUpdate.reset}
+            className="mx-auto max-w-3xl"
+          />
+        </div>
+      )}
 
       <div className="min-h-0 flex-1">
         {tasks.data.length === 0 ? (
@@ -315,6 +348,15 @@ export function ProjectPage() {
         people={peopleList}
         onCreated={openTask}
       />
+      {aiEnabled && (
+        <ActionsDialog
+          open={aiActionsOpen}
+          onOpenChange={setAiActionsOpen}
+          workspaceId={workspaceId}
+          projectId={p.id}
+          title={`AI actions in ${p.name}`}
+        />
+      )}
       {p.role === 'admin' && (
         <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} project={p} />
       )}

@@ -2,6 +2,7 @@ import {
   effectiveProjectRole,
   type SearchIndexJob,
   type SearchResponse,
+  type SearchResult,
   type SearchSourceType,
   type WorkspaceEvent,
 } from '@team-os/shared';
@@ -23,6 +24,7 @@ import {
   markdownToText,
   reciprocalRankFusion,
   stripMentions,
+  toAnyWordQuery,
   toPrefixTsQuery,
   type IndexableSource,
 } from '../domain/search.js';
@@ -211,6 +213,22 @@ export class SearchWorkspace {
     workspaceId: string,
     query: { q: string; types?: SearchSourceType[]; limit: number },
   ): Promise<SearchResponse> {
+    const { semantic, results } = await this.retrieve(actorId, workspaceId, {
+      ...query,
+      match: 'all',
+    });
+    return { semantic, results: results.map(({ content: _content, ...result }) => result) };
+  }
+
+  /**
+   * Search results with the matching chunk's full text (context for AI answers).
+   * `match: 'any'` finds content with any of the query's words, for natural-language questions.
+   */
+  async retrieve(
+    actorId: string,
+    workspaceId: string,
+    query: { q: string; types?: SearchSourceType[]; limit: number; match: 'all' | 'any' },
+  ): Promise<{ semantic: boolean; results: (SearchResult & { content: string })[] }> {
     const role = await this.deps.workspaceAccess.authorize(actorId, workspaceId, {
       action: 'workspace:read',
     });
@@ -228,9 +246,14 @@ export class SearchWorkspace {
       limit: Math.max(query.limit * 3, 30),
     };
 
-    const tsquery = toPrefixTsQuery(query.q);
+    let keywordQuery: { prefix: string; text: string } | null;
+    if (query.match === 'any') keywordQuery = toAnyWordQuery(query.q);
+    else {
+      const prefix = toPrefixTsQuery(query.q);
+      keywordQuery = prefix ? { prefix, text: query.q } : null;
+    }
     const [keywordHits, semanticHits] = await Promise.all([
-      tsquery ? search.keyword(scope, { prefix: tsquery, text: query.q }) : Promise.resolve([]),
+      keywordQuery ? search.keyword(scope, keywordQuery) : Promise.resolve([]),
       this.semantic(scope, query.q),
     ]);
 
@@ -263,6 +286,7 @@ export class SearchWorkspace {
         taskId: item.taskId,
         taskKey: item.taskId ? (refs.get(item.taskId)?.key ?? null) : null,
         score: Math.round(score * 10_000) / 10_000,
+        content: item.content,
       })),
     };
   }

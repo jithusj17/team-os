@@ -141,6 +141,28 @@
 
 /* Rendered Markdown in docs. */
 @layer components {
+  /* AI summaries and answers: the doc styles, a size down. */
+  .ai-prose {
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  .ai-prose > * + * {
+    margin-top: 0.5em;
+  }
+  .ai-prose a.ai-cite {
+    display: inline-flex;
+    min-width: 1.35em;
+    height: 1.35em;
+    align-items: center;
+    justify-content: center;
+    margin: 0 0.1em;
+    border-radius: 0.35em;
+    background: var(--accent-soft);
+    font-size: 0.72em;
+    font-weight: 600;
+    vertical-align: 0.25em;
+    text-decoration: none;
+  }
   .doc-prose {
     font-size: 15px;
     line-height: 1.7;

@@ -1,3 +1,4 @@
+export * from './ai-schemas.js';
 export * from './collab-schemas.js';
 export * from './events.js';
 export * from './health.js';

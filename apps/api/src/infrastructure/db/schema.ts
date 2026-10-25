@@ -566,3 +566,30 @@ export const searchIndex = pgTable(
     index('search_index_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
   ],
 );
+
+// ---- AI action proposals (audit log) ----
+
+/**
+ * Every set of AI-proposed actions, what the user confirmed, and what happened. Execution
+ * locks the row, so confirming twice can't apply the actions twice.
+ */
+export const aiProposals = pgTable(
+  'ai_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    instruction: text('instruction').notNull(),
+    context: jsonb('context'),
+    summary: text('summary').notNull(),
+    actions: jsonb('actions').notNull(),
+    status: text('status').notNull().default('pending'),
+    results: jsonb('results'),
+    model: text('model').notNull(),
+    createdAt: createdAt(),
+    executedAt: timestamp('executed_at', { withTimezone: true }),
+  },
+  (t) => [index('ai_proposals_workspace_created_idx').on(t.workspaceId, t.createdAt)],
+);

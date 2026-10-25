@@ -30,6 +30,7 @@ type Row = {
   task_id: string | null;
   title: string;
   snippet: string;
+  content: string;
 };
 
 const toHit = (r: Row): SearchHit => ({
@@ -39,6 +40,7 @@ const toHit = (r: Row): SearchHit => ({
   taskId: r.task_id,
   title: r.title,
   snippet: r.snippet,
+  content: r.content,
 });
 
 export class DrizzleSearchRepository implements SearchIndexRepository {
@@ -117,7 +119,7 @@ export class DrizzleSearchRepository implements SearchIndexRepository {
       ),
       top as (select id, rank from best order by rank desc limit ${scope.limit})
       select s.source_type, s.source_id, s.project_id, s.task_id, s.title,
-        ts_headline('english', s.content, q.q, ${options}) as snippet
+        ts_headline('english', s.content, q.q, ${options}) as snippet, s.content
       from top join search_index s on s.id = top.id cross join q
       order by top.rank desc
     `);
@@ -131,7 +133,7 @@ export class DrizzleSearchRepository implements SearchIndexRepository {
   ): Promise<SearchHit[]> {
     // Nearest chunks via the HNSW index, then keep each source's closest chunk.
     const rows = await this.rows<Row>(sql`
-      select source_type, source_id, project_id, task_id, title, left(content, 240) as snippet
+      select source_type, source_id, project_id, task_id, title, left(content, 240) as snippet, content
       from search_index
       where embedding is not null and ${accessFilter(scope)}
         and embedding <=> ${vectorLiteral(embedding)} < ${1 - minSimilarity}

@@ -1,4 +1,4 @@
-import { Bell, BellOff, Link2, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { Bell, BellOff, Link2, MoreHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { canInProject, type ProjectDetail, type ProjectMember, type Task } from '@team-os/shared';
@@ -8,6 +8,8 @@ import { Avatar, Tooltip } from '../../components/ui/misc';
 import { PageSpinner } from '../../components/ui/spinner';
 import { cn } from '../../lib/cn';
 import { usePresence } from '../../lib/realtime';
+import { SummaryCard } from '../ai/components';
+import { useAiEnabled, useSummary } from '../ai/hooks';
 import { useCurrentUser } from '../auth/hooks';
 import { useLabels, useWorkspaceId } from '../workspaces/hooks';
 import { AssigneePicker, LabelPicker, PriorityPicker, StatusPicker } from './fields';
@@ -115,6 +117,8 @@ export function TaskPanel({
   const viewers = usePresence(taskId).filter((id) => id !== me.id);
   const peopleMap = useMemo(() => new Map(people.map((p) => [p.userId, p])), [people]);
   const canEdit = canInProject(project.role, 'task:update');
+  const aiEnabled = useAiEnabled();
+  const summary = useSummary('task', taskId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -183,6 +187,19 @@ export function TaskPanel({
             </span>
           </Tooltip>
         )}
+        {aiEnabled && (
+          <Tooltip content="Summarize with AI">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Summarize with AI"
+              disabled={summary.status === 'streaming'}
+              onClick={summary.run}
+            >
+              <Sparkles className="size-4 text-accent" />
+            </Button>
+          </Tooltip>
+        )}
         <Tooltip content={watching ? 'Stop watching' : 'Watch for updates'}>
           <Button
             variant="ghost"
@@ -244,6 +261,8 @@ export function TaskPanel({
             className="text-[18px] leading-snug font-semibold"
           />
         </div>
+
+        <SummaryCard stream={summary} onClose={summary.reset} />
 
         <div className="space-y-1">
           <Property label="Status">

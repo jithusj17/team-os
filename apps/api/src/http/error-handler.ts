@@ -10,6 +10,7 @@ const statusByKind: Record<ErrorKind, number> = {
   not_found: 404,
   conflict: 409,
   gone: 410,
+  unprocessable: 422,
   unavailable: 503,
 };
 

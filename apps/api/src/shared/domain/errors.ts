@@ -4,7 +4,14 @@
  * mapping kinds to transport-specific responses is the interface layer's job.
  */
 export type ErrorKind =
-  'validation' | 'unauthorized' | 'forbidden' | 'not_found' | 'conflict' | 'gone' | 'unavailable';
+  | 'validation'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'conflict'
+  | 'gone'
+  | 'unprocessable'
+  | 'unavailable';
 
 export class DomainError extends Error {
   constructor(
@@ -28,5 +35,7 @@ export const notFound = (code = 'not_found', message = 'Not found') =>
 export const conflict = (code: string, message: string) =>
   new DomainError('conflict', code, message);
 export const gone = (code: string, message: string) => new DomainError('gone', code, message);
+export const unprocessable = (code: string, message: string) =>
+  new DomainError('unprocessable', code, message);
 export const unavailable = (code: string, message: string) =>
   new DomainError('unavailable', code, message);

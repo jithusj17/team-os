@@ -1,6 +1,7 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ArrowLeft,
   Bell,
   CalendarDays,
   CheckSquare,
@@ -19,6 +20,8 @@ import { Kbd } from '../../components/ui/misc';
 import { Spinner } from '../../components/ui/spinner';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { AiText, sourceLink } from '../ai/components';
+import { useAiEnabled, useAiStream } from '../ai/hooks';
 import { useProjects } from '../projects/hooks';
 import { useWorkspaceId } from '../workspaces/hooks';
 
@@ -53,6 +56,8 @@ interface Item {
   title: string;
   subtitle?: React.ReactNode;
   to: string;
+  /** Runs instead of navigating. */
+  action?: () => void;
 }
 
 function useDebounced<T>(value: T, ms: number) {
@@ -78,6 +83,10 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const q = useDebounced(query.trim(), 150);
+  const aiEnabled = useAiEnabled();
+  const answer = useAiStream();
+  const startAnswer = answer.start;
+  const [asked, setAsked] = useState<string | null>(null);
 
   const search = useQuery({
     queryKey: ['search', workspaceId, q],
@@ -128,17 +137,38 @@ export function CommandPalette({
         })),
       ];
     }
-    return (search.data?.results ?? []).map((r) => ({
-      key: `${r.type}:${r.id}`,
-      icon: typeIcon[r.type],
-      title: r.title,
-      subtitle: r.snippet ? <Highlighted text={r.snippet} /> : undefined,
-      to: linkFor(r),
-    }));
-  }, [query, search.data, projects.data, base]);
+    const question = query.trim();
+    const ask: Item[] =
+      aiEnabled && question.length >= 2
+        ? [
+            {
+              key: 'ask',
+              icon: <Sparkles className="size-4 text-accent" />,
+              title: `Ask AI: “${question}”`,
+              subtitle: 'Answer from your workspace, with sources',
+              to: '',
+              action: () => {
+                setAsked(question);
+                void startAnswer(`/workspaces/${workspaceId}/ai/ask`, { question });
+              },
+            },
+          ]
+        : [];
+    return [
+      ...(search.data?.results ?? []).map((r) => ({
+        key: `${r.type}:${r.id}`,
+        icon: typeIcon[r.type],
+        title: r.title,
+        subtitle: r.snippet ? <Highlighted text={r.snippet} /> : undefined,
+        to: linkFor(r),
+      })),
+      ...ask,
+    ];
+  }, [query, search.data, projects.data, base, aiEnabled, startAnswer, workspaceId]);
 
   const go = (item: Item | undefined) => {
     if (!item) return;
+    if (item.action) return item.action();
     onOpenChange(false);
     navigate(item.to);
   };
@@ -163,7 +193,11 @@ export function CommandPalette({
       open={open}
       onOpenChange={(o) => {
         onOpenChange(o);
-        if (!o) setQuery('');
+        if (!o) {
+          setQuery('');
+          setAsked(null);
+          answer.reset();
+        }
       }}
     >
       <RadixDialog.Portal>
@@ -184,6 +218,10 @@ export function CommandPalette({
               onChange={(e) => {
                 setQuery(e.target.value);
                 setActive(0);
+                if (asked !== null) {
+                  setAsked(null);
+                  answer.reset();
+                }
               }}
               placeholder="Search tasks, docs, comments, meetings…"
               className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-fg-subtle"
@@ -191,34 +229,89 @@ export function CommandPalette({
             {search.isFetching && <Spinner className="size-4 text-fg-subtle" />}
           </div>
 
-          <div ref={listRef} className="max-h-[52vh] overflow-y-auto p-1.5">
-            {items.map((item, i) => (
+          {asked !== null ? (
+            <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
               <button
-                key={item.key}
-                onMouseMove={() => setActive(i)}
-                onClick={() => go(item)}
-                className={cn(
-                  'flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left',
-                  i === active && 'bg-hover',
-                )}
+                onClick={() => {
+                  setAsked(null);
+                  answer.reset();
+                }}
+                className="mb-2 flex items-center gap-1 text-[12px] text-fg-subtle hover:text-fg"
               >
-                <span className="mt-0.5 text-fg-muted">{item.icon}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium">{item.title}</span>
-                  {item.subtitle && (
-                    <span className="mt-0.5 line-clamp-2 block text-[12px] text-fg-muted">
-                      {item.subtitle}
-                    </span>
-                  )}
-                </span>
+                <ArrowLeft className="size-3.5" /> Back to results
               </button>
-            ))}
-            {query.trim() && search.data && items.length === 0 && (
-              <div className="px-4 py-10 text-center text-[13px] text-fg-subtle">
-                No results for “{query.trim()}”
+              <div className="mb-2 flex items-center gap-2 text-[12px] font-medium text-accent">
+                <Sparkles className="size-3.5" /> Answer
+                {answer.status === 'streaming' && <Spinner className="size-3" />}
               </div>
-            )}
-          </div>
+              {answer.text ? (
+                <AiText text={answer.text} sources={answer.sources} workspaceId={workspaceId} />
+              ) : (
+                answer.status === 'streaming' && (
+                  <p className="text-[13px] text-fg-subtle">Searching your workspace…</p>
+                )
+              )}
+              {answer.status === 'error' && (
+                <p className="mt-2 text-[13px] text-danger">{answer.error}</p>
+              )}
+              {answer.sources.length > 0 && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-1.5 text-[11px] font-medium tracking-wide text-fg-subtle uppercase">
+                    Sources
+                  </p>
+                  <ol className="space-y-0.5">
+                    {answer.sources.map((s) => (
+                      <li key={s.n}>
+                        <button
+                          onClick={() => {
+                            onOpenChange(false);
+                            navigate(sourceLink(workspaceId, s));
+                          }}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] hover:bg-hover"
+                        >
+                          <span className="w-4 text-right text-fg-subtle">{s.n}</span>
+                          <span className="text-fg-muted">{typeIcon[s.type]}</span>
+                          <span className="truncate">{s.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              <p className="mt-3 text-[11px] text-fg-subtle">
+                AI-generated from content you can access. Check the sources.
+              </p>
+            </div>
+          ) : (
+            <div ref={listRef} className="max-h-[52vh] overflow-y-auto p-1.5">
+              {items.map((item, i) => (
+                <button
+                  key={item.key}
+                  onMouseMove={() => setActive(i)}
+                  onClick={() => go(item)}
+                  className={cn(
+                    'flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left',
+                    i === active && 'bg-hover',
+                  )}
+                >
+                  <span className="mt-0.5 text-fg-muted">{item.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium">{item.title}</span>
+                    {item.subtitle && (
+                      <span className="mt-0.5 line-clamp-2 block text-[12px] text-fg-muted">
+                        {item.subtitle}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+              {query.trim() && search.data && items.length === 0 && (
+                <div className="px-4 py-10 text-center text-[13px] text-fg-subtle">
+                  No results for “{query.trim()}”
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3 border-t border-border px-4 py-2 text-[11px] text-fg-subtle">
             <span className="flex items-center gap-1">
